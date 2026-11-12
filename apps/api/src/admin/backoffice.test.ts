@@ -384,7 +384,7 @@ describe('email', () => {
   it('sign-up sends a verification link that confirms the email once', async () => {
     const owner = await signup();
     const mail = mailer.lastTo(owner.email)!;
-    expect(mail.subject).toMatch(/Bekräfta/);
+    expect(mail.subject).toMatch(/Confirm your email/);
 
     expect((await call('GET', '/admin/me', owner.token)).json().user.emailVerified).toBe(false);
     const token = tokenFrom(mail.text);

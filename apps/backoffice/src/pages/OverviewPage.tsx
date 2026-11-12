@@ -1,19 +1,21 @@
 import { useState } from 'react';
 import { api } from '../api';
 import { formatKr, formatOrgNumber } from '../format';
+import { useT } from '../i18n';
 import { useLoad } from '../useLoad';
 
 const today = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm' });
 
 /** Sales for one day across every company the user manages, each company kept separate. */
 export function OverviewPage() {
+  const t = useT();
   const [date, setDate] = useState(today);
   const { data, error } = useLoad(() => api.overview(date), [date]);
 
   return (
     <section>
       <header className="page-header">
-        <h1>Översikt</h1>
+        <h1>{t('Overview')}</h1>
         <input
           type="date"
           value={date}
@@ -21,23 +23,25 @@ export function OverviewPage() {
           onChange={(e) => setDate(e.target.value || today())}
         />
       </header>
-      {error && <p className="error">{error}</p>}
+      {error && <p className="error">{t(error)}</p>}
       {data && data.companies.length === 0 && (
-        <p className="muted">Du hanterar inget företag. Registrera ett i menyn till vänster.</p>
+        <p className="muted">
+          {t('You do not manage any company. Register one in the menu on the left.')}
+        </p>
       )}
       {data && data.companies.length > 0 && (
         <>
           <div className="stat-row">
             <div className="stat">
-              <span className="muted small">Nettoförsäljning alla företag</span>
+              <span className="muted small">{t('Net sales, all companies')}</span>
               <strong>{formatKr(data.netOre)}</strong>
             </div>
             <div className="stat">
-              <span className="muted small">Företag</span>
+              <span className="muted small">{t('Companies')}</span>
               <strong>{data.companies.length}</strong>
             </div>
             <div className="stat">
-              <span className="muted small">Restauranger</span>
+              <span className="muted small">{t('Restaurants')}</span>
               <strong>{data.companies.reduce((n, c) => n + c.restaurants.length, 0)}</strong>
             </div>
           </div>
@@ -53,10 +57,10 @@ export function OverviewPage() {
               <table>
                 <thead>
                   <tr>
-                    <th>Restaurang</th>
-                    <th className="num">Kvitton</th>
-                    <th className="num">Returer</th>
-                    <th className="num">Netto</th>
+                    <th>{t('Restaurant')}</th>
+                    <th className="num">{t('Receipts')}</th>
+                    <th className="num">{t('Returns')}</th>
+                    <th className="num">{t('Net')}</th>
                   </tr>
                 </thead>
                 <tbody>

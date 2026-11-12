@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { pairDevice } from './api';
+import { LanguageToggle, useT } from './i18n';
 
 interface Props {
   onPaired: () => void;
@@ -9,6 +10,7 @@ const message = (err: unknown) => (err instanceof Error ? err.message : String(e
 
 /** First start on a new tablet: enter the code from the back office to become a register. */
 export function PairingScreen({ onPaired }: Props) {
+  const t = useT();
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -19,7 +21,7 @@ export function PairingScreen({ onPaired }: Props) {
     setBusy(true);
     setError(null);
     try {
-      await pairDevice(code, name || 'Kassa');
+      await pairDevice(code, name || t('Till'));
       onPaired();
     } catch (err) {
       setError(message(err));
@@ -31,18 +33,15 @@ export function PairingScreen({ onPaired }: Props) {
   return (
     <div className="login">
       <form className="pairing" onSubmit={submit}>
-        <h1>Koppla den här enheten</h1>
+        <LanguageToggle />
+        <h1>{t('Pair this device')}</h1>
         <ol className="muted">
-          <li>
-            Logga in i back office och öppna <strong>Restauranger &amp; kassor</strong>.
-          </li>
-          <li>
-            Tryck <strong>Koppla enhet</strong> vid kassan som den här enheten ska vara.
-          </li>
-          <li>Skriv in koden här. Den gäller i 15 minuter.</li>
+          <li>{t('Log in to the back office and open Restaurants & registers.')}</li>
+          <li>{t('Press Pair device next to the register this device should be.')}</li>
+          <li>{t('Type the code here. It is valid for 15 minutes.')}</li>
         </ol>
         <label className="field">
-          Kod
+          {t('Code')}
           <input
             className="code-input"
             required
@@ -56,9 +55,9 @@ export function PairingScreen({ onPaired }: Props) {
           />
         </label>
         <label className="field">
-          Namn på enheten (valfritt)
+          {t('Device name (optional)')}
           <input
-            placeholder="t.ex. iPad vid baren"
+            placeholder={t('e.g. iPad at the bar')}
             maxLength={60}
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -66,11 +65,11 @@ export function PairingScreen({ onPaired }: Props) {
         </label>
         {error && (
           <p className="error" role="alert">
-            {error}
+            {t(error)}
           </p>
         )}
         <button className="primary full" disabled={busy || code.replace(/[\s-]/g, '').length < 8}>
-          {busy ? 'Kopplar…' : 'Koppla'}
+          {busy ? t('Pairing…') : t('Pair')}
         </button>
       </form>
     </div>

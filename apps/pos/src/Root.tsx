@@ -9,6 +9,7 @@ import {
   type Staff,
 } from './api';
 import { App } from './App';
+import { useT } from './i18n';
 import { LoginScreen } from './LoginScreen';
 import { PairingScreen } from './PairingScreen';
 
@@ -16,6 +17,7 @@ const message = (err: unknown) => (err instanceof Error ? err.message : String(e
 
 /** Pair the device first, then a staff member logs in, then the till. */
 export function Root() {
+  const t = useT();
   const [device, setDevice] = useState<DeviceInfo | null>(null);
   const [staff, setStaff] = useState<Staff | null>(null);
   const [checking, setChecking] = useState(true);
@@ -44,14 +46,14 @@ export function Root() {
     void start();
   }, [start]);
 
-  if (checking) return <div className="center-message">Laddar…</div>;
+  if (checking) return <div className="center-message">{t('Loading…')}</div>;
   if (error) {
     return (
       <div className="center-message">
-        <h1>Kassan kunde inte startas</h1>
-        <p>{error}</p>
+        <h1>{t('The till could not start')}</h1>
+        <p>{t(error)}</p>
         <button className="primary" onClick={() => void start()}>
-          Försök igen
+          {t('Try again')}
         </button>
       </div>
     );

@@ -745,3 +745,32 @@ button:disabled {
   background: var(--warn-soft);
   color: var(--warn);
 }
+
+/* Language toggle */
+
+.lang-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.lang-toggle button {
+  padding: 4px 10px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.lang-toggle button.active {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.login-header .lang-toggle,
+.pairing .lang-toggle {
+  align-self: flex-end;
+  margin-bottom: 12px;
+}

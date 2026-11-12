@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from './api';
 import { message } from './format';
+import { useT } from './i18n';
 import { useAction } from './useLoad';
 
 /** Pages opened from email links: #/verify?token=… and #/reset?token=… */
@@ -15,6 +16,7 @@ function leave(onDone: () => void) {
 }
 
 export function VerifyEmailPage({ token, onDone }: { token: string; onDone: () => void }) {
+  const t = useT();
   const [state, setState] = useState<'working' | 'ok' | string>('working');
 
   useEffect(() => {
@@ -27,13 +29,13 @@ export function VerifyEmailPage({ token, onDone }: { token: string; onDone: () =
   return (
     <div className="auth">
       <div className="auth-card stack">
-        <p className="brand">Restaurang POS</p>
-        <h1>Bekräfta e-post</h1>
-        {state === 'working' && <p className="muted">Bekräftar…</p>}
-        {state === 'ok' && <p>Tack! Din e-postadress är bekräftad.</p>}
-        {state !== 'working' && state !== 'ok' && <p className="error">{state}</p>}
+        <p className="brand">Restaurant POS</p>
+        <h1>{t('Confirm email')}</h1>
+        {state === 'working' && <p className="muted">{t('Confirming…')}</p>}
+        {state === 'ok' && <p>{t('Thank you! Your email address is confirmed.')}</p>}
+        {state !== 'working' && state !== 'ok' && <p className="error">{t(state)}</p>}
         <button className="primary" onClick={() => leave(onDone)}>
-          Fortsätt
+          {t('Continue')}
         </button>
       </div>
     </div>
@@ -41,6 +43,7 @@ export function VerifyEmailPage({ token, onDone }: { token: string; onDone: () =
 }
 
 export function ResetPasswordPage({ token, onDone }: { token: string; onDone: () => void }) {
+  const t = useT();
   const [password, setPassword] = useState('');
   const [repeat, setRepeat] = useState('');
   const [done, setDone] = useState(false);
@@ -54,20 +57,20 @@ export function ResetPasswordPage({ token, onDone }: { token: string; onDone: ()
   return (
     <div className="auth">
       <div className="auth-card">
-        <p className="brand">Restaurang POS</p>
+        <p className="brand">Restaurant POS</p>
         {done ? (
           <div className="stack">
-            <h1>Lösenordet är bytt</h1>
-            <p>Logga in med ditt nya lösenord. Du har loggats ut överallt annars.</p>
+            <h1>{t('Your password is changed')}</h1>
+            <p>{t('Log in with your new password. You have been logged out everywhere else.')}</p>
             <button className="primary" onClick={() => leave(onDone)}>
-              Till inloggningen
+              {t('Go to login')}
             </button>
           </div>
         ) : (
           <form className="stack" onSubmit={submit}>
-            <h1>Välj nytt lösenord</h1>
+            <h1>{t('Choose a new password')}</h1>
             <label className="field">
-              Nytt lösenord (minst 10 tecken)
+              {t('New password (at least 10 characters)')}
               <input
                 type="password"
                 required
@@ -78,7 +81,7 @@ export function ResetPasswordPage({ token, onDone }: { token: string; onDone: ()
               />
             </label>
             <label className="field">
-              Upprepa
+              {t('Repeat')}
               <input
                 type="password"
                 required
@@ -87,10 +90,12 @@ export function ResetPasswordPage({ token, onDone }: { token: string; onDone: ()
                 onChange={(e) => setRepeat(e.target.value)}
               />
             </label>
-            {repeat && repeat !== password && <p className="error">Lösenorden är inte lika.</p>}
-            {error && <p className="error">{error}</p>}
+            {repeat && repeat !== password && (
+              <p className="error">{t('The passwords do not match.')}</p>
+            )}
+            {error && <p className="error">{t(error)}</p>}
             <button className="primary" disabled={busy || password !== repeat}>
-              Spara
+              {t('Save')}
             </button>
           </form>
         )}
@@ -100,6 +105,7 @@ export function ResetPasswordPage({ token, onDone }: { token: string; onDone: ()
 }
 
 export function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
+  const t = useT();
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const { busy, error, run } = useAction();
@@ -111,20 +117,22 @@ export function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
 
   return sent ? (
     <div className="stack">
-      <h1>Kolla din e-post</h1>
+      <h1>{t('Check your email')}</h1>
       <p>
-        Om det finns ett konto för {email} har vi skickat en länk för att välja nytt lösenord.
-        Länken gäller i en timme.
+        {t(
+          'If there is an account for {email}, we have sent a link to choose a new password. The link is valid for one hour.',
+          { email },
+        )}
       </p>
       <button className="secondary" onClick={onBack}>
-        Tillbaka till inloggningen
+        {t('Back to login')}
       </button>
     </div>
   ) : (
     <form className="stack" onSubmit={submit}>
-      <h1>Glömt lösenord</h1>
+      <h1>{t('Forgot password')}</h1>
       <label className="field">
-        E-post
+        {t('Email')}
         <input
           type="email"
           required
@@ -133,12 +141,12 @@ export function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
           onChange={(e) => setEmail(e.target.value)}
         />
       </label>
-      {error && <p className="error">{error}</p>}
+      {error && <p className="error">{t(error)}</p>}
       <button className="primary" disabled={busy}>
-        Skicka länk
+        {t('Send link')}
       </button>
       <button type="button" className="link" onClick={onBack}>
-        Tillbaka
+        {t('Back')}
       </button>
     </form>
   );

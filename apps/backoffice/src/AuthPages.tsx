@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { api } from './api';
+import { LanguageToggle, useT } from './i18n';
 import { ForgotPasswordForm } from './LinkPages';
 import { useAction } from './useLoad';
 
@@ -12,7 +13,10 @@ export function AuthPages({ onLoggedIn }: Props) {
   return (
     <div className="auth">
       <div className="auth-card">
-        <p className="brand">Restaurang POS</p>
+        <div className="auth-top">
+          <p className="brand">Restaurant POS</p>
+          <LanguageToggle />
+        </div>
         {mode === 'login' && (
           <LoginForm
             onLoggedIn={onLoggedIn}
@@ -34,6 +38,7 @@ function LoginForm({
   onSignup,
   onForgot,
 }: Props & { onSignup: () => void; onForgot: () => void }) {
+  const t = useT();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { busy, error, run } = useAction();
@@ -45,9 +50,9 @@ function LoginForm({
 
   return (
     <form onSubmit={submit} className="stack">
-      <h1>Logga in</h1>
+      <h1>{t('Log in')}</h1>
       <label className="field">
-        E-post
+        {t('Email')}
         <input
           type="email"
           autoComplete="username"
@@ -57,7 +62,7 @@ function LoginForm({
         />
       </label>
       <label className="field">
-        Lösenord
+        {t('Password')}
         <input
           type="password"
           autoComplete="current-password"
@@ -66,19 +71,19 @@ function LoginForm({
           onChange={(e) => setPassword(e.target.value)}
         />
       </label>
-      {error && <p className="error">{error}</p>}
+      {error && <p className="error">{t(error)}</p>}
       <button className="primary" disabled={busy}>
-        {busy ? 'Loggar in…' : 'Logga in'}
+        {busy ? t('Logging in…') : t('Log in')}
       </button>
       <p className="muted center">
         <button type="button" className="link" onClick={onForgot}>
-          Glömt lösenord?
+          {t('Forgot password?')}
         </button>
       </p>
       <p className="muted center">
-        Ny restaurang?{' '}
+        {t('New restaurant?')}{' '}
         <button type="button" className="link" onClick={onSignup}>
-          Registrera ditt företag
+          {t('Register your company')}
         </button>
       </p>
     </form>
@@ -86,6 +91,7 @@ function LoginForm({
 }
 
 function SignupForm({ onLoggedIn, onLogin }: Props & { onLogin: () => void }) {
+  const t = useT();
   const [form, setForm] = useState({
     ownerName: '',
     email: '',
@@ -109,19 +115,20 @@ function SignupForm({ onLoggedIn, onLogin }: Props & { onLogin: () => void }) {
 
   return (
     <form onSubmit={submit} className="stack">
-      <h1>Registrera ditt företag</h1>
+      <h1>{t('Register your company')}</h1>
       <p className="muted">
-        Du kan lägga upp meny, personal och kassor direkt. Kassorna kan sälja när vi har godkänt
-        företaget.
+        {t(
+          'You can set up menu, staff and registers right away. The registers can sell once we have approved the company.',
+        )}
       </p>
       <fieldset>
-        <legend>Du</legend>
+        <legend>{t('You')}</legend>
         <label className="field">
-          Namn
+          {t('Name')}
           <input required value={form.ownerName} onChange={set('ownerName')} />
         </label>
         <label className="field">
-          E-post
+          {t('Email')}
           <input
             type="email"
             required
@@ -131,7 +138,7 @@ function SignupForm({ onLoggedIn, onLogin }: Props & { onLogin: () => void }) {
           />
         </label>
         <label className="field">
-          Lösenord (minst 10 tecken)
+          {t('Password (at least 10 characters)')}
           <input
             type="password"
             required
@@ -143,18 +150,18 @@ function SignupForm({ onLoggedIn, onLogin }: Props & { onLogin: () => void }) {
         </label>
       </fieldset>
       <fieldset>
-        <legend>Företaget</legend>
+        <legend>{t('Company')}</legend>
         <label className="field">
-          Företagsnamn
+          {t('Company name')}
           <input
             required
-            placeholder="Exempel Restaurang AB"
+            placeholder={t('Example Restaurant AB')}
             value={form.legalName}
             onChange={set('legalName')}
           />
         </label>
         <label className="field">
-          Organisationsnummer
+          {t('Organisation number')}
           <input
             required
             placeholder="556677-8899"
@@ -164,24 +171,24 @@ function SignupForm({ onLoggedIn, onLogin }: Props & { onLogin: () => void }) {
         </label>
       </fieldset>
       <fieldset>
-        <legend>Första restaurangen</legend>
+        <legend>{t('First restaurant')}</legend>
         <label className="field">
-          Namn
+          {t('Name')}
           <input required value={form.restaurantName} onChange={set('restaurantName')} />
         </label>
         <label className="field">
-          Adress (valfritt)
+          {t('Address (optional)')}
           <input value={form.restaurantAddress} onChange={set('restaurantAddress')} />
         </label>
       </fieldset>
-      {error && <p className="error">{error}</p>}
+      {error && <p className="error">{t(error)}</p>}
       <button className="primary" disabled={busy}>
-        {busy ? 'Registrerar…' : 'Registrera'}
+        {busy ? t('Registering…') : t('Register')}
       </button>
       <p className="muted center">
-        Har du redan ett konto?{' '}
+        {t('Already have an account?')}{' '}
         <button type="button" className="link" onClick={onLogin}>
-          Logga in
+          {t('Log in')}
         </button>
       </p>
     </form>

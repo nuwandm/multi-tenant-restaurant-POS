@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { api, type Role } from '../api';
 import { ROLE_LABELS } from '../format';
+import { useT } from '../i18n';
 import { useAction, useLoad } from '../useLoad';
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 
 /** Staff and roles. Everyone gets a till PIN; owners and managers can also get a back office login. */
 export function StaffPage({ tenantId, myRole, myUserId }: Props) {
+  const t = useT();
   const { data, error, reload } = useLoad(() => api.staff(tenantId), [tenantId]);
   const action = useAction();
   const assignable: Role[] =
@@ -21,10 +23,10 @@ export function StaffPage({ tenantId, myRole, myUserId }: Props) {
   };
 
   async function resetPin(userId: string, name: string) {
-    const pin = window.prompt(`Ny PIN-kod för ${name} (4–8 siffror):`);
+    const pin = window.prompt(t('New PIN for {name} (4–8 digits):', { name }));
     if (pin === null) return;
     if (!/^\d{4,8}$/.test(pin)) {
-      window.alert('PIN-koden ska vara 4–8 siffror.');
+      window.alert(t('The PIN must be 4–8 digits.'));
       return;
     }
     await update(userId, { pin });
@@ -33,17 +35,17 @@ export function StaffPage({ tenantId, myRole, myUserId }: Props) {
   return (
     <section>
       <header className="page-header">
-        <h1>Personal</h1>
+        <h1>{t('Staff')}</h1>
       </header>
-      {(error || action.error) && <p className="error">{error ?? action.error}</p>}
+      {(error || action.error) && <p className="error">{t((error ?? action.error)!)}</p>}
       <div className="card">
         <table>
           <thead>
             <tr>
-              <th>Namn</th>
-              <th>Roll</th>
-              <th>Inloggning</th>
-              <th>Aktiv</th>
+              <th>{t('Name')}</th>
+              <th>{t('Role')}</th>
+              <th>{t('Login')}</th>
+              <th>{t('Active')}</th>
               <th />
             </tr>
           </thead>
@@ -55,7 +57,7 @@ export function StaffPage({ tenantId, myRole, myUserId }: Props) {
                 <tr key={s.userId} className={s.active ? '' : 'muted'}>
                   <td>
                     <strong>{s.displayName}</strong>
-                    {self && <span className="muted"> (du)</span>}
+                    {self && <span className="muted"> {t('(you)')}</span>}
                     {s.email && <div className="muted small">{s.email}</div>}
                   </td>
                   <td>
@@ -66,20 +68,20 @@ export function StaffPage({ tenantId, myRole, myUserId }: Props) {
                     >
                       {(locked ? ['owner' as Role] : assignable).map((r) => (
                         <option key={r} value={r}>
-                          {ROLE_LABELS[r]}
+                          {t(ROLE_LABELS[r])}
                         </option>
                       ))}
                     </select>
                   </td>
                   <td className="small">
-                    {s.hasPin ? 'PIN i kassan' : <span className="muted">Ingen PIN</span>}
-                    {s.pinLocked && <span className="badge badge-suspended">Låst</span>}
+                    {s.hasPin ? t('Till PIN') : <span className="muted">{t('No PIN')}</span>}
+                    {s.pinLocked && <span className="badge badge-suspended">{t('Locked')}</span>}
                     {s.hasPassword && <div>Back office</div>}
                   </td>
                   <td>
                     <input
                       type="checkbox"
-                      aria-label="Aktiv"
+                      aria-label={t('Active')}
                       checked={s.active}
                       disabled={self || locked}
                       onChange={(e) => update(s.userId, { active: e.target.checked })}
@@ -92,7 +94,7 @@ export function StaffPage({ tenantId, myRole, myUserId }: Props) {
                         disabled={action.busy}
                         onClick={() => resetPin(s.userId, s.displayName)}
                       >
-                        {s.hasPin ? 'Ny PIN' : 'Sätt PIN'}
+                        {s.hasPin ? t('New PIN') : t('Set PIN')}
                       </button>
                     )}
                   </td>
@@ -124,6 +126,7 @@ function AddStaffForm({
   onAdd: (body: Parameters<typeof api.addStaff>[1]) => Promise<boolean>;
   busy: boolean;
 }) {
+  const t = useT();
   const empty = { displayName: '', role: 'cashier' as Role, pin: '', email: '', password: '' };
   const [form, setForm] = useState(empty);
   const backOffice = form.role !== 'cashier';
@@ -142,10 +145,10 @@ function AddStaffForm({
 
   return (
     <form className="card stack" onSubmit={submit}>
-      <h2>Lägg till personal</h2>
+      <h2>{t('Add staff')}</h2>
       <div className="form-grid">
         <label className="field">
-          Namn
+          {t('Name')}
           <input
             required
             value={form.displayName}
@@ -153,31 +156,31 @@ function AddStaffForm({
           />
         </label>
         <label className="field">
-          Roll
+          {t('Role')}
           <select
             value={form.role}
             onChange={(e) => setForm({ ...form, role: e.target.value as Role })}
           >
             {assignable.map((r) => (
               <option key={r} value={r}>
-                {ROLE_LABELS[r]}
+                {t(ROLE_LABELS[r])}
               </option>
             ))}
           </select>
         </label>
         <label className="field">
-          PIN-kod för kassan
+          {t('Till PIN')}
           <input
             required
             inputMode="numeric"
             pattern="\d{4,8}"
-            title="4–8 siffror"
+            title={t('4–8 digits')}
             value={form.pin}
             onChange={(e) => setForm({ ...form, pin: e.target.value })}
           />
         </label>
         <label className="field">
-          E-post {backOffice ? '(för back office)' : '(valfritt)'}
+          {backOffice ? t('Email (for the back office)') : t('Email (optional)')}
           <input
             type="email"
             value={form.email}
@@ -186,7 +189,7 @@ function AddStaffForm({
         </label>
         {backOffice && (
           <label className="field">
-            Lösenord för back office (valfritt, minst 10 tecken)
+            {t('Back office password (optional, at least 10 characters)')}
             <input
               type="password"
               minLength={10}
@@ -199,7 +202,7 @@ function AddStaffForm({
       </div>
       <div>
         <button className="primary" disabled={busy}>
-          Lägg till
+          {t('Add')}
         </button>
       </div>
     </form>

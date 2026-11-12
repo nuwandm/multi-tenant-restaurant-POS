@@ -1,6 +1,7 @@
 import { ore, roundToKrona } from '@pos/domain';
 import { useState } from 'react';
 import { formatKr } from './format';
+import { useT } from './i18n';
 
 interface Props {
   totalOre: number;
@@ -13,6 +14,7 @@ const NOTES = [10000, 20000, 50000, 100000];
 
 /** Cash payment: the amount due is rounded to whole kronor; the cashier enters what was handed over. */
 export function CashDialog({ totalOre, busy, onPay, onCancel }: Props) {
+  const t = useT();
   const dueOre = roundToKrona(ore(totalOre));
   const [tenderedKr, setTenderedKr] = useState('');
 
@@ -22,22 +24,22 @@ export function CashDialog({ totalOre, busy, onPay, onCancel }: Props) {
   const changeOre = valid ? tenderedOre - dueOre : 0;
 
   return (
-    <div className="overlay" role="dialog" aria-modal="true" aria-label="Kontant betalning">
+    <div className="overlay" role="dialog" aria-modal="true" aria-label={t('Cash payment')}>
       <div className="dialog">
-        <h2>Kontant</h2>
+        <h2>{t('Cash')}</h2>
         <dl className="cash-summary">
-          <dt>Att betala</dt>
+          <dt>{t('To pay')}</dt>
           <dd>{formatKr(totalOre)}</dd>
           {dueOre !== totalOre && (
             <>
-              <dt>Avrundat</dt>
+              <dt>{t('Rounded')}</dt>
               <dd>{formatKr(dueOre)}</dd>
             </>
           )}
         </dl>
 
         <label className="field">
-          Mottaget (kr)
+          {t('Received (kr)')}
           <input
             inputMode="decimal"
             autoFocus
@@ -48,7 +50,7 @@ export function CashDialog({ totalOre, busy, onPay, onCancel }: Props) {
         </label>
         <div className="quick-amounts">
           <button type="button" onClick={() => setTenderedKr('')}>
-            Jämnt
+            {t('Exact')}
           </button>
           {NOTES.filter((n) => n >= dueOre).map((n) => (
             <button key={n} type="button" onClick={() => setTenderedKr(String(n / 100))}>
@@ -58,12 +60,14 @@ export function CashDialog({ totalOre, busy, onPay, onCancel }: Props) {
         </div>
 
         <p className={`change ${valid ? '' : 'invalid'}`}>
-          {valid ? `Växel: ${formatKr(changeOre)}` : 'Mottaget belopp räcker inte'}
+          {valid
+            ? t('Change: {amount}', { amount: formatKr(changeOre) })
+            : t('The amount received is not enough')}
         </p>
 
         <div className="dialog-actions">
           <button type="button" className="secondary" onClick={onCancel} disabled={busy}>
-            Avbryt
+            {t('Cancel')}
           </button>
           <button
             type="button"
@@ -71,7 +75,7 @@ export function CashDialog({ totalOre, busy, onPay, onCancel }: Props) {
             disabled={!valid || busy}
             onClick={() => onPay(dueOre, changeOre)}
           >
-            {busy ? 'Signerar…' : 'Slutför'}
+            {busy ? t('Signing…') : t('Complete')}
           </button>
         </div>
       </div>

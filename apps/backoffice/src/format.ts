@@ -17,15 +17,15 @@ export const formatDateTime = (iso: string) =>
 export const formatOrgNumber = (n: string) => n.replace(/^(\d{6})/, '$1-');
 
 export const ROLE_LABELS: Record<Role, string> = {
-  owner: 'Ägare',
-  manager: 'Chef',
-  cashier: 'Kassör',
+  owner: 'Owner',
+  manager: 'Manager',
+  cashier: 'Cashier',
 };
 
 export const STATUS_LABELS: Record<CompanyStatus, string> = {
-  pending: 'Väntar på godkännande',
-  active: 'Aktiv',
-  suspended: 'Avstängd',
+  pending: 'Waiting for approval',
+  active: 'Active',
+  suspended: 'Suspended',
 };
 
 export const message = (err: unknown) => (err instanceof Error ? err.message : String(err));

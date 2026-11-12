@@ -12,8 +12,8 @@ export function formatDateTime(iso: string): string {
 }
 
 export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
-  card: 'Kort',
-  cash: 'Kontant',
+  card: 'Card',
+  cash: 'Cash',
   swish: 'Swish',
-  gift_card: 'Presentkort',
+  gift_card: 'Gift card',
 };

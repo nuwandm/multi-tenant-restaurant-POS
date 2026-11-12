@@ -2,17 +2,19 @@ import type { VatRate } from '@pos/domain';
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, type Article, type MenuGroup } from '../api';
 import { formatKr, parseKr } from '../format';
+import { useT } from '../i18n';
 import { useAction, useLoad } from '../useLoad';
 
 const VAT_OPTIONS: { rate: VatRate; label: string }[] = [
-  { rate: 12, label: '12 % (mat)' },
-  { rate: 25, label: '25 % (alkohol)' },
-  { rate: 6, label: '6 %' },
-  { rate: 0, label: '0 %' },
+  { rate: 12, label: '12% (food)' },
+  { rate: 25, label: '25% (alcohol)' },
+  { rate: 6, label: '6%' },
+  { rate: 0, label: '0%' },
 ];
 
 /** Menu per restaurant. Changes reach the tills at once; old receipts keep their prices. */
 export function MenuPage({ tenantId }: { tenantId: string }) {
+  const t = useT();
   const restaurants = useLoad(() => api.restaurants(tenantId), [tenantId]);
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
 
@@ -24,7 +26,7 @@ export function MenuPage({ tenantId }: { tenantId: string }) {
   return (
     <section>
       <header className="page-header">
-        <h1>Meny</h1>
+        <h1>{t('Menu')}</h1>
         {restaurants.data && restaurants.data.restaurants.length > 1 && (
           <select value={restaurantId ?? ''} onChange={(e) => setRestaurantId(e.target.value)}>
             {restaurants.data.restaurants.map((r) => (
@@ -35,7 +37,7 @@ export function MenuPage({ tenantId }: { tenantId: string }) {
           </select>
         )}
       </header>
-      {restaurants.error && <p className="error">{restaurants.error}</p>}
+      {restaurants.error && <p className="error">{t(restaurants.error)}</p>}
       {restaurantId && (
         <MenuEditor key={restaurantId} tenantId={tenantId} restaurantId={restaurantId} />
       )}
@@ -44,6 +46,7 @@ export function MenuPage({ tenantId }: { tenantId: string }) {
 }
 
 function MenuEditor({ tenantId, restaurantId }: { tenantId: string; restaurantId: string }) {
+  const t = useT();
   const { data, error, reload } = useLoad(
     () => api.menu(tenantId, restaurantId),
     [tenantId, restaurantId],
@@ -66,7 +69,9 @@ function MenuEditor({ tenantId, restaurantId }: { tenantId: string; restaurantId
     if (await action.run(fn)) reload();
   };
 
-  if (!data) return error ? <p className="error">{error}</p> : <p className="muted">Laddar…</p>;
+  if (!data) {
+    return error ? <p className="error">{t(error)}</p> : <p className="muted">{t('Loading…')}</p>;
+  }
 
   const sections: { group: MenuGroup | null; articles: Article[] }[] = [
     ...data.groups.map((g) => ({
@@ -78,7 +83,7 @@ function MenuEditor({ tenantId, restaurantId }: { tenantId: string; restaurantId
 
   return (
     <>
-      {action.error && <p className="error">{action.error}</p>}
+      {action.error && <p className="error">{t(action.error)}</p>}
       {sections.map(({ group, articles }) => (
         <div
           key={group?.id ?? 'none'}
@@ -92,7 +97,7 @@ function MenuEditor({ tenantId, restaurantId }: { tenantId: string; restaurantId
                 className="h2"
               />
             ) : (
-              <h2 className="muted">Utan grupp</h2>
+              <h2 className="muted">{t('No group')}</h2>
             )}
             {group && (
               <label className="toggle small">
@@ -103,18 +108,18 @@ function MenuEditor({ tenantId, restaurantId }: { tenantId: string; restaurantId
                     save(() => api.updateGroup(tenantId, group.id, { active: e.target.checked }))
                   }
                 />
-                Visas i kassan
+                {t('Shown at the till')}
               </label>
             )}
           </div>
           <table>
             <thead>
               <tr>
-                <th>Rätt</th>
-                <th className="num">Pris</th>
-                <th>Moms</th>
-                <th>Grupp</th>
-                <th>I kassan</th>
+                <th>{t('Item')}</th>
+                <th className="num">{t('Price')}</th>
+                <th>{t('VAT')}</th>
+                <th>{t('Group')}</th>
+                <th>{t('At the till')}</th>
               </tr>
             </thead>
             <tbody>
@@ -130,7 +135,7 @@ function MenuEditor({ tenantId, restaurantId }: { tenantId: string; restaurantId
               {articles.length === 0 && (
                 <tr>
                   <td colSpan={5} className="muted">
-                    Inga rätter.
+                    {t('No items.')}
                   </td>
                 </tr>
               )}
@@ -143,15 +148,15 @@ function MenuEditor({ tenantId, restaurantId }: { tenantId: string; restaurantId
         </div>
       ))}
       <form className="card inline-form" onSubmit={addGroup}>
-        <strong>Ny grupp</strong>
+        <strong>{t('New group')}</strong>
         <input
           required
-          placeholder="t.ex. Förrätter"
+          placeholder={t('e.g. Starters')}
           value={groupName}
           onChange={(e) => setGroupName(e.target.value)}
         />
         <button className="primary small" disabled={action.busy}>
-          Lägg till grupp
+          {t('Add group')}
         </button>
       </form>
     </>
@@ -169,6 +174,7 @@ function ArticleRow({
   tenantId: string;
   save: (fn: () => Promise<unknown>) => Promise<void>;
 }) {
+  const t = useT();
   const update = (body: Partial<Omit<Article, 'id'>>) =>
     save(() => api.updateArticle(tenantId, article.id, body));
   return (
@@ -191,7 +197,7 @@ function ArticleRow({
         >
           {VAT_OPTIONS.map((o) => (
             <option key={o.rate} value={o.rate}>
-              {o.label}
+              {t(o.label)}
             </option>
           ))}
         </select>
@@ -201,7 +207,7 @@ function ArticleRow({
           value={article.menuGroupId ?? ''}
           onChange={(e) => update({ menuGroupId: e.target.value || null })}
         >
-          <option value="">Utan grupp</option>
+          <option value="">{t('No group')}</option>
           {groups.map((g) => (
             <option key={g.id} value={g.id}>
               {g.name}
@@ -212,7 +218,7 @@ function ArticleRow({
       <td>
         <input
           type="checkbox"
-          aria-label="Visas i kassan"
+          aria-label={t('Shown at the till')}
           checked={article.active}
           onChange={(e) => update({ active: e.target.checked })}
         />
@@ -233,6 +239,7 @@ function NewArticleForm({
     menuGroupId: string | null;
   }) => Promise<void>;
 }) {
+  const t = useT();
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [vatRate, setVatRate] = useState<VatRate>(12);
@@ -250,14 +257,14 @@ function NewArticleForm({
     <form className="inline-form" onSubmit={submit}>
       <input
         required
-        placeholder="Ny rätt"
+        placeholder={t('New item')}
         value={name}
         onChange={(e) => setName(e.target.value)}
       />
       <input
         required
         inputMode="decimal"
-        placeholder="Pris i kr"
+        placeholder={t('Price in kr')}
         className={price && priceOre === null ? 'invalid' : ''}
         value={price}
         onChange={(e) => setPrice(e.target.value)}
@@ -265,12 +272,12 @@ function NewArticleForm({
       <select value={vatRate} onChange={(e) => setVatRate(Number(e.target.value) as VatRate)}>
         {VAT_OPTIONS.map((o) => (
           <option key={o.rate} value={o.rate}>
-            {o.label}
+            {t(o.label)}
           </option>
         ))}
       </select>
       <button className="primary small" disabled={!name || priceOre === null}>
-        Lägg till
+        {t('Add')}
       </button>
     </form>
   );
@@ -290,6 +297,7 @@ function InlineText({
   validate?: (value: string) => boolean;
   className?: string;
 }) {
+  const t = useT();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
 
@@ -298,7 +306,7 @@ function InlineText({
       <button
         type="button"
         className={`inline-edit ${className}`}
-        title="Klicka för att ändra"
+        title={t('Click to change')}
         onClick={() => {
           setDraft(value);
           setEditing(true);

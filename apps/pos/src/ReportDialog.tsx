@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { createXReport, createZReport, type Report } from './api';
 import { formatDateTime, formatKr, PAYMENT_LABELS } from './format';
+import { useT } from './i18n';
 
 interface Props {
   type: 'x' | 'z';
@@ -11,6 +12,7 @@ const message = (err: unknown) => (err instanceof Error ? err.message : String(e
 
 /** X report (snapshot) or Z report (closes the day). Z asks for confirmation first. */
 export function ReportDialog({ type, onClose }: Props) {
+  const t = useT();
   const [report, setReport] = useState<Report | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,28 +34,30 @@ export function ReportDialog({ type, onClose }: Props) {
       className="overlay"
       role="dialog"
       aria-modal="true"
-      aria-label={`${type.toUpperCase()}-rapport`}
+      aria-label={type === 'x' ? t('X report') : t('Z report')}
     >
       <div className="dialog">
         {!report && (
           <>
-            <h2>{type === 'x' ? 'X-rapport' : 'Z-rapport – stäng dagen'}</h2>
+            <h2>{type === 'x' ? t('X report') : t('Z report – close the day')}</h2>
             <p>
               {type === 'x'
-                ? 'Visar försäljningen hittills sedan senaste Z-rapport. Ingenting stängs.'
-                : 'Stänger perioden och sparar dagens totaler för gott. Nästa försäljning hamnar på nästa Z-rapport.'}
+                ? t('Shows sales since the last Z report. Nothing is closed.')
+                : t(
+                    'Closes the period and stores its totals for good. The next sale goes on the next Z report.',
+                  )}
             </p>
             {error && (
               <p className="error" role="alert">
-                {error}
+                {t(error)}
               </p>
             )}
             <div className="dialog-actions">
               <button type="button" className="secondary" onClick={onClose} disabled={busy}>
-                Avbryt
+                {t('Cancel')}
               </button>
               <button type="button" className="primary" onClick={take} disabled={busy}>
-                {busy ? 'Skapar…' : type === 'x' ? 'Visa X-rapport' : 'Ta Z-rapport'}
+                {busy ? t('Creating…') : type === 'x' ? t('Show X report') : t('Take Z report')}
               </button>
             </div>
           </>
@@ -63,24 +67,36 @@ export function ReportDialog({ type, onClose }: Props) {
           <>
             <div className="receipt">
               <p className="receipt-seller">
-                {report.zNumber ? `Z-RAPPORT nr ${report.zNumber}` : 'X-RAPPORT'}
+                {report.zNumber
+                  ? t('Z REPORT no. {number}', { number: report.zNumber })
+                  : t('X REPORT')}
               </p>
               <p>{report.seller.legalName}</p>
-              <p>Org.nr {report.seller.orgNumber.replace(/^(\d{6})/, '$1-')}</p>
-              <p>Kassa {report.register.designation}</p>
+              <p>
+                {t('Org. no. {number}', {
+                  number: report.seller.orgNumber.replace(/^(\d{6})/, '$1-'),
+                })}
+              </p>
+              <p>{t('Register {name}', { name: report.register.designation })}</p>
               <p className="small">
                 {formatDateTime(report.periodFrom)} – {formatDateTime(report.periodTo)}
               </p>
               <hr />
-              <Row label={`Försäljning (${report.counts.sale})`} ore={report.salesTotalOre} />
-              <Row label={`Returer (${report.counts.return})`} ore={report.returnsTotalOre} />
-              <Row label="Nettoförsäljning" ore={report.netTotalOre} bold />
+              <Row
+                label={t('Sales ({count})', { count: report.counts.sale })}
+                ore={report.salesTotalOre}
+              />
+              <Row
+                label={t('Returns ({count})', { count: report.counts.return })}
+                ore={report.returnsTotalOre}
+              />
+              <Row label={t('Net sales')} ore={report.netTotalOre} bold />
               <hr />
-              {report.totalsByVat.length === 0 && <p className="small muted">Ingen moms</p>}
+              {report.totalsByVat.length === 0 && <p className="small muted">{t('No VAT')}</p>}
               {report.totalsByVat.map((v) => (
                 <Row
                   key={v.vatRate}
-                  label={`Moms ${v.vatRate}% på ${formatKr(v.netOre)}`}
+                  label={t('VAT {rate}% on {net}', { rate: v.vatRate, net: formatKr(v.netOre) })}
                   ore={v.vatOre}
                   small
                 />
@@ -89,40 +105,44 @@ export function ReportDialog({ type, onClose }: Props) {
               {Object.entries(report.totalsByPayment).map(([m, amount]) => (
                 <Row
                   key={m}
-                  label={PAYMENT_LABELS[m as keyof typeof PAYMENT_LABELS]}
+                  label={t(PAYMENT_LABELS[m as keyof typeof PAYMENT_LABELS])}
                   ore={amount}
                 />
               ))}
               {report.cashRoundingOre !== 0 && (
-                <Row label="Öresavrundning" ore={report.cashRoundingOre} small />
+                <Row label={t('Cash rounding')} ore={report.cashRoundingOre} small />
               )}
               <hr />
-              <Row label={`Kopior (${report.counts.copy})`} ore={report.copyTotalOre} small />
               <Row
-                label={`Träning (${report.counts.training})`}
+                label={t('Copies ({count})', { count: report.counts.copy })}
+                ore={report.copyTotalOre}
+                small
+              />
+              <Row
+                label={t('Training ({count})', { count: report.counts.training })}
                 ore={report.trainingTotalOre}
                 small
               />
               <Row
-                label={`Proforma (${report.counts.proforma})`}
+                label={t('Proforma ({count})', { count: report.counts.proforma })}
                 ore={report.proformaTotalOre}
                 small
               />
               <p className="row small">
-                <span>Lådöppningar</span>
+                <span>{t('Drawer openings')}</span>
                 <span>{report.drawerOpenCount}</span>
               </p>
               <hr />
-              <Row label="Grand total försäljning" ore={report.grandTotals.salesOre} small />
-              <Row label="Grand total returer" ore={report.grandTotals.returnsOre} small />
-              <Row label="Grand total netto" ore={report.grandTotals.netOre} bold />
+              <Row label={t('Grand total sales')} ore={report.grandTotals.salesOre} small />
+              <Row label={t('Grand total returns')} ore={report.grandTotals.returnsOre} small />
+              <Row label={t('Grand total net')} ore={report.grandTotals.netOre} bold />
             </div>
             <div className="dialog-actions">
               <button type="button" className="secondary" onClick={() => window.print()}>
-                Skriv ut
+                {t('Print')}
               </button>
               <button type="button" className="primary" onClick={onClose} autoFocus>
-                Klar
+                {t('Done')}
               </button>
             </div>
           </>

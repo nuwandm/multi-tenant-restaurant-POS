@@ -8,14 +8,15 @@ import { PlatformPage } from './pages/PlatformPage';
 import { RestaurantsPage } from './pages/RestaurantsPage';
 import { StaffPage } from './pages/StaffPage';
 import { ZReportsPage } from './pages/ZReportsPage';
+import { LanguageToggle, useT } from './i18n';
 import { useAction } from './useLoad';
 
 const COMPANY_PAGES = {
-  restaurants: 'Restauranger & kassor',
-  menu: 'Meny',
-  staff: 'Personal',
-  z: 'Z-rapporter',
-  audit: 'Ändringslogg',
+  restaurants: 'Restaurants & registers',
+  menu: 'Menu',
+  staff: 'Staff',
+  z: 'Z reports',
+  audit: 'Change log',
 } as const;
 
 type Page = 'overview' | 'platform' | keyof typeof COMPANY_PAGES;
@@ -36,6 +37,7 @@ interface Props {
 }
 
 export function Shell({ me, onChanged, onLogout }: Props) {
+  const t = useT();
   const [page, setPage] = useState<Page>(pageFromHash);
   const [tenantId, setTenantId] = useState<string | null>(() => {
     try {
@@ -72,18 +74,18 @@ export function Shell({ me, onChanged, onLogout }: Props) {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <p className="brand">Restaurang POS</p>
+        <p className="brand">Restaurant POS</p>
 
         <nav>
           <button className={page === 'overview' ? 'active' : ''} onClick={() => go('overview')}>
-            Översikt
+            {t('Overview')}
           </button>
         </nav>
 
         {me.companies.length > 0 && (
           <div className="company-picker">
             <label className="field small">
-              Företag
+              {t('Company')}
               <select value={tenantId ?? ''} onChange={(e) => selectCompany(e.target.value)}>
                 {me.companies.map((c) => (
                   <option key={c.tenantId} value={c.tenantId}>
@@ -94,7 +96,7 @@ export function Shell({ me, onChanged, onLogout }: Props) {
             </label>
             {company && (
               <p className="muted small">
-                {formatOrgNumber(company.orgNumber)} · {ROLE_LABELS[company.role]}
+                {formatOrgNumber(company.orgNumber)} · {t(ROLE_LABELS[company.role])}
               </p>
             )}
           </div>
@@ -104,28 +106,29 @@ export function Shell({ me, onChanged, onLogout }: Props) {
           <nav>
             {(Object.keys(COMPANY_PAGES) as (keyof typeof COMPANY_PAGES)[]).map((p) => (
               <button key={p} className={page === p ? 'active' : ''} onClick={() => go(p)}>
-                {COMPANY_PAGES[p]}
+                {t(COMPANY_PAGES[p])}
               </button>
             ))}
           </nav>
         )}
 
         <button className="link small" onClick={() => setAddingCompany(true)}>
-          + Registrera ett till företag
+          {t('+ Register another company')}
         </button>
 
         {me.isPlatformAdmin && (
           <nav className="platform-nav">
             <button className={page === 'platform' ? 'active' : ''} onClick={() => go('platform')}>
-              Plattform
+              {t('Platform')}
             </button>
           </nav>
         )}
 
         <div className="sidebar-footer">
+          <LanguageToggle />
           <p className="small">{me.user.displayName}</p>
           <button className="link small" onClick={onLogout}>
-            Logga ut
+            {t('Log out')}
           </button>
         </div>
       </aside>
@@ -142,7 +145,7 @@ export function Shell({ me, onChanged, onLogout }: Props) {
         {company && page === 'z' && <ZReportsPage tenantId={company.tenantId} />}
         {company && page === 'audit' && <AuditPage tenantId={company.tenantId} />}
         {!company && page !== 'overview' && page !== 'platform' && (
-          <p className="muted">Du hanterar inget företag än.</p>
+          <p className="muted">{t('You do not manage any company yet.')}</p>
         )}
       </main>
 
@@ -168,6 +171,7 @@ function AddCompanyDialog({
   onClose: () => void;
   onAdded: (tenantId: string) => Promise<void>;
 }) {
+  const t = useT();
   const [form, setForm] = useState({ legalName: '', orgNumber: '', restaurantName: '' });
   const { busy, error, run } = useAction();
   const set = (key: keyof typeof form) => (e: { target: { value: string } }) =>
@@ -180,18 +184,18 @@ function AddCompanyDialog({
   }
 
   return (
-    <div className="overlay" role="dialog" aria-modal="true" aria-label="Registrera företag">
+    <div className="overlay" role="dialog" aria-modal="true" aria-label={t('Register company')}>
       <form className="dialog stack" onSubmit={submit}>
-        <h2>Registrera ett till företag</h2>
+        <h2>{t('Register another company')}</h2>
         <p className="muted small">
-          Ett eget organisationsnummer. Väntar på godkännande innan kassorna kan sälja.
+          {t('A separate organisation number. Waits for approval before the registers can sell.')}
         </p>
         <label className="field">
-          Företagsnamn
+          {t('Company name')}
           <input required value={form.legalName} onChange={set('legalName')} />
         </label>
         <label className="field">
-          Organisationsnummer
+          {t('Organisation number')}
           <input
             required
             placeholder="556677-8899"
@@ -200,16 +204,16 @@ function AddCompanyDialog({
           />
         </label>
         <label className="field">
-          Första restaurangen
+          {t('First restaurant')}
           <input required value={form.restaurantName} onChange={set('restaurantName')} />
         </label>
-        {error && <p className="error">{error}</p>}
+        {error && <p className="error">{t(error)}</p>}
         <div className="row-actions">
           <button type="button" className="secondary" onClick={onClose}>
-            Avbryt
+            {t('Cancel')}
           </button>
           <button className="primary" disabled={busy}>
-            Registrera
+            {t('Register')}
           </button>
         </div>
       </form>
@@ -218,23 +222,24 @@ function AddCompanyDialog({
 }
 
 function VerifyBanner({ email }: { email: string }) {
+  const t = useT();
   const [sent, setSent] = useState(false);
   const { busy, error, run } = useAction();
   return (
     <p className="notice">
-      Bekräfta din e-postadress {email} via länken vi skickade.{' '}
+      {t('Confirm your email address {email} with the link we sent.', { email })}{' '}
       {sent ? (
-        'Ny länk skickad.'
+        t('New link sent.')
       ) : (
         <button
           className="link"
           disabled={busy}
           onClick={async () => setSent(await run(() => api.resendVerification()))}
         >
-          Skicka igen
+          {t('Send again')}
         </button>
       )}
-      {error && ` ${error}`}
+      {error && ` ${t(error)}`}
     </p>
   );
 }

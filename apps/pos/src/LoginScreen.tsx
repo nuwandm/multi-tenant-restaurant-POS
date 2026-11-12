@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { login, type DeviceInfo, type Staff } from './api';
+import { LanguageToggle, useT } from './i18n';
 
 interface Props {
   device: DeviceInfo;
@@ -7,9 +8,9 @@ interface Props {
 }
 
 const ROLE_LABELS: Record<Staff['role'], string> = {
-  owner: 'Ägare',
-  manager: 'Chef',
-  cashier: 'Kassör',
+  owner: 'Owner',
+  manager: 'Manager',
+  cashier: 'Cashier',
 };
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'];
@@ -19,6 +20,7 @@ const message = (err: unknown) => (err instanceof Error ? err.message : String(e
 
 /** Pick your name, then enter your PIN on the keypad (or the keyboard). */
 export function LoginScreen({ device: info, onLoggedIn }: Props) {
+  const t = useT();
   const [selected, setSelected] = useState<Staff | null>(null);
   const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
@@ -60,22 +62,24 @@ export function LoginScreen({ device: info, onLoggedIn }: Props) {
   return (
     <div className="login">
       <header className="login-header">
+        <LanguageToggle />
         <h1>{info.restaurant.name}</h1>
         <p className="muted">
-          {info.company.legalName} · Kassa {info.register.designation} · {info.device.name}
+          {info.company.legalName} · {t('Register {name}', { name: info.register.designation })} ·{' '}
+          {info.device.name}
         </p>
         {info.company.status === 'pending' && (
           <p className="notice">
-            Företaget väntar på godkännande. Du kan logga in och träna, men inte sälja än.
+            {t('The company is waiting for approval. You can log in and train, but not sell yet.')}
           </p>
         )}
       </header>
 
       {!selected ? (
         <>
-          <h2>Vem är du?</h2>
+          <h2>{t('Who are you?')}</h2>
           {info.staff.length === 0 && (
-            <p className="muted">Ingen personal med PIN-kod. Lägg till personal i back office.</p>
+            <p className="muted">{t('No staff with a PIN. Add staff in the back office.')}</p>
           )}
           <div className="staff-grid">
             {info.staff.map((s) => (
@@ -93,7 +97,7 @@ export function LoginScreen({ device: info, onLoggedIn }: Props) {
                   {s.displayName.slice(0, 1)}
                 </span>
                 <span className="staff-name">{s.displayName}</span>
-                <span className="muted small">{ROLE_LABELS[s.role]}</span>
+                <span className="muted small">{t(ROLE_LABELS[s.role])}</span>
               </button>
             ))}
           </div>
@@ -101,17 +105,17 @@ export function LoginScreen({ device: info, onLoggedIn }: Props) {
       ) : (
         <div className="pin-panel">
           <button type="button" className="link" onClick={() => setSelected(null)}>
-            ← Byt person
+            {t('← Change person')}
           </button>
-          <h2>Hej {selected.displayName}, ange PIN-kod</h2>
-          <div className="pin-dots" aria-label={`${pin.length} siffror inmatade`}>
+          <h2>{t('Hi {name}, enter your PIN', { name: selected.displayName })}</h2>
+          <div className="pin-dots" aria-label={t('{count} digits entered', { count: pin.length })}>
             {Array.from({ length: Math.max(4, pin.length) }, (_, i) => (
               <span key={i} className={i < pin.length ? 'filled' : ''} />
             ))}
           </div>
           {error && (
             <p className="error" role="alert">
-              {error}
+              {t(error)}
             </p>
           )}
           <div className="keypad">
@@ -120,7 +124,7 @@ export function LoginScreen({ device: info, onLoggedIn }: Props) {
                 key={k}
                 type="button"
                 onClick={() => press(k)}
-                aria-label={k === '⌫' ? 'Radera' : k === 'C' ? 'Rensa' : k}
+                aria-label={k === '⌫' ? t('Delete') : k === 'C' ? t('Clear') : k}
               >
                 {k}
               </button>
@@ -132,7 +136,7 @@ export function LoginScreen({ device: info, onLoggedIn }: Props) {
             disabled={pin.length < 4 || busy}
             onClick={submit}
           >
-            {busy ? 'Loggar in…' : 'Logga in'}
+            {busy ? t('Logging in…') : t('Log in')}
           </button>
         </div>
       )}

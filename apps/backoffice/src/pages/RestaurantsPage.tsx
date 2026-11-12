@@ -1,10 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { formatDateTime, formatOrgNumber, STATUS_LABELS } from '../format';
+import { useT } from '../i18n';
 import { useAction, useLoad } from '../useLoad';
 
 /** Branches (restaurants) and their registers. Registers are retired, never deleted. */
 export function RestaurantsPage({ tenantId }: { tenantId: string }) {
+  const t = useT();
   const { data, error, reload } = useLoad(() => api.restaurants(tenantId), [tenantId]);
   const action = useAction();
   const [newRestaurant, setNewRestaurant] = useState({ name: '', address: '' });
@@ -42,7 +44,9 @@ export function RestaurantsPage({ tenantId }: { tenantId: string }) {
   async function retire(registerId: string, designation: string) {
     if (
       !window.confirm(
-        `Avregistrera ${designation}? Kassan kan inte sälja mer. Kvitton och Z-rapporter sparas.`,
+        t('Retire {name}? It can no longer sell. Its receipts and Z reports are kept.', {
+          name: designation,
+        }),
       )
     )
       return;
@@ -57,7 +61,10 @@ export function RestaurantsPage({ tenantId }: { tenantId: string }) {
   }
 
   async function revoke(deviceId: string, name: string) {
-    if (!window.confirm(`Koppla bort ${name}? Den som är inloggad där loggas ut direkt.`)) return;
+    if (
+      !window.confirm(t('Unpair {name}? Anyone logged in on it is logged out at once.', { name }))
+    )
+      return;
     if (await action.run(() => api.revokeDevice(tenantId, deviceId))) reload();
   }
 
@@ -73,24 +80,25 @@ export function RestaurantsPage({ tenantId }: { tenantId: string }) {
         />
       )}
       <header className="page-header">
-        <h1>Restauranger & kassor</h1>
+        <h1>{t('Restaurants & registers')}</h1>
       </header>
       {data?.company && (
         <p className="muted">
-          {data.company.legalName} · {formatOrgNumber(data.company.orgNumber)} · Företags-ID{' '}
+          {data.company.legalName} · {formatOrgNumber(data.company.orgNumber)} · {t('Company ID')}{' '}
           <span className="mono">{tenantId}</span> ·{' '}
           <span className={`badge badge-${data.company.status}`}>
-            {STATUS_LABELS[data.company.status]}
+            {t(STATUS_LABELS[data.company.status])}
           </span>
         </p>
       )}
       {data?.company.status === 'pending' && (
         <p className="notice">
-          Företaget väntar på godkännande. Du kan lägga upp allt redan nu; kassorna kan sälja när
-          företaget är godkänt.
+          {t(
+            'The company is waiting for approval. You can set everything up now; the registers can sell once the company is approved.',
+          )}
         </p>
       )}
-      {(error || action.error) && <p className="error">{error ?? action.error}</p>}
+      {(error || action.error) && <p className="error">{t((error ?? action.error)!)}</p>}
 
       {data?.restaurants.map((r) => (
         <div key={r.id} className="card">
@@ -103,10 +111,10 @@ export function RestaurantsPage({ tenantId }: { tenantId: string }) {
           <table>
             <thead>
               <tr>
-                <th>Kassa (kassabeteckning)</th>
-                <th>Status</th>
-                <th>Kontrollsystem</th>
-                <th>Kopplade enheter</th>
+                <th>{t('Register (designation)')}</th>
+                <th>{t('Status')}</th>
+                <th>{t('Control system')}</th>
+                <th>{t('Paired devices')}</th>
                 <th />
               </tr>
             </thead>
@@ -115,16 +123,20 @@ export function RestaurantsPage({ tenantId }: { tenantId: string }) {
                 <tr key={c.id} className={c.status === 'retired' ? 'muted' : ''}>
                   <td>
                     <strong>{c.designation}</strong>
-                    <div className="muted small">Skapad {formatDateTime(c.createdAt)}</div>
+                    <div className="muted small">
+                      {t('Created {date}', { date: formatDateTime(c.createdAt) })}
+                    </div>
                   </td>
                   <td>
                     {c.status === 'active'
-                      ? 'Aktiv'
-                      : `Avregistrerad ${c.retiredAt ? formatDateTime(c.retiredAt) : ''}`}
+                      ? t('Active')
+                      : t('Retired {date}', {
+                          date: c.retiredAt ? formatDateTime(c.retiredAt) : '',
+                        })}
                   </td>
-                  <td>{c.enrolled ? 'Ansluten' : 'Ej ansluten'}</td>
+                  <td>{c.enrolled ? t('Connected') : t('Not connected')}</td>
                   <td className="small">
-                    {c.devices.length === 0 && <span className="muted">Ingen</span>}
+                    {c.devices.length === 0 && <span className="muted">{t('None')}</span>}
                     {c.devices.map((d) => (
                       <div key={d.id} className="device">
                         <span>
@@ -133,8 +145,8 @@ export function RestaurantsPage({ tenantId }: { tenantId: string }) {
                             {' '}
                             ·{' '}
                             {d.lastSeenAt
-                              ? `senast ${formatDateTime(d.lastSeenAt)}`
-                              : `kopplad ${formatDateTime(d.pairedAt)}`}
+                              ? t('last used {date}', { date: formatDateTime(d.lastSeenAt) })
+                              : t('paired {date}', { date: formatDateTime(d.pairedAt) })}
                           </span>
                         </span>
                         <button
@@ -142,7 +154,7 @@ export function RestaurantsPage({ tenantId }: { tenantId: string }) {
                           disabled={action.busy}
                           onClick={() => revoke(d.id, d.name)}
                         >
-                          Koppla bort
+                          {t('Unpair')}
                         </button>
                       </div>
                     ))}
@@ -155,14 +167,14 @@ export function RestaurantsPage({ tenantId }: { tenantId: string }) {
                           disabled={action.busy}
                           onClick={() => showCode(c.id, c.designation)}
                         >
-                          Koppla enhet
+                          {t('Pair device')}
                         </button>{' '}
                         <button
                           className="secondary small"
                           disabled={action.busy}
                           onClick={() => retire(c.id, c.designation)}
                         >
-                          Avregistrera
+                          {t('Retire')}
                         </button>
                       </>
                     )}
@@ -172,7 +184,7 @@ export function RestaurantsPage({ tenantId }: { tenantId: string }) {
               {r.registers.length === 0 && (
                 <tr>
                   <td colSpan={5} className="muted">
-                    Ingen kassa än.
+                    {t('No register yet.')}
                   </td>
                 </tr>
               )}
@@ -180,34 +192,34 @@ export function RestaurantsPage({ tenantId }: { tenantId: string }) {
           </table>
           <form className="inline-form" onSubmit={(e) => addRegister(e, r.id)}>
             <input
-              placeholder="Ny kassa, t.ex. KASSA-2"
+              placeholder={t('New register, e.g. TILL-2')}
               pattern="[A-Za-z0-9\-]{1,20}"
-              title="Bokstäver, siffror och bindestreck, högst 20 tecken"
+              title={t('Letters, digits and dashes, at most 20 characters')}
               value={newRegister[r.id] ?? ''}
               onChange={(e) => setNewRegister((x) => ({ ...x, [r.id]: e.target.value }))}
             />
             <button className="primary small" disabled={action.busy}>
-              Lägg till kassa
+              {t('Add register')}
             </button>
           </form>
         </div>
       ))}
 
       <form className="card inline-form" onSubmit={addRestaurant}>
-        <strong>Ny restaurang</strong>
+        <strong>{t('New restaurant')}</strong>
         <input
           required
-          placeholder="Namn"
+          placeholder={t('Name')}
           value={newRestaurant.name}
           onChange={(e) => setNewRestaurant((x) => ({ ...x, name: e.target.value }))}
         />
         <input
-          placeholder="Adress (valfritt)"
+          placeholder={t('Address (optional)')}
           value={newRestaurant.address}
           onChange={(e) => setNewRestaurant((x) => ({ ...x, address: e.target.value }))}
         />
         <button className="primary small" disabled={action.busy}>
-          Lägg till
+          {t('Add')}
         </button>
       </form>
     </section>
@@ -226,6 +238,7 @@ function PairingCodeDialog({
   designation: string;
   onClose: () => void;
 }) {
+  const t = useT();
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -235,19 +248,22 @@ function PairingCodeDialog({
   const mmss = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
 
   return (
-    <div className="overlay" role="dialog" aria-modal="true" aria-label="Kopplingskod">
+    <div className="overlay" role="dialog" aria-modal="true" aria-label={t('Pairing code')}>
       <div className="dialog stack center">
-        <h2>Koppla en enhet till {designation}</h2>
+        <h2>{t('Pair a device with {name}', { name: designation })}</h2>
         <p className="muted small">
-          Öppna kassan på surfplattan eller datorn och skriv in koden. Koden kan bara användas en
-          gång.
+          {t(
+            'Open the till on the tablet or computer and type in the code. The code can be used once.',
+          )}
         </p>
         <p className="pairing-code">{left > 0 ? code : '––––-––––'}</p>
         <p className={left > 0 ? 'muted' : 'error'}>
-          {left > 0 ? `Gäller i ${mmss}` : 'Koden har gått ut. Stäng och skapa en ny.'}
+          {left > 0
+            ? t('Valid for {time}', { time: mmss })
+            : t('The code has expired. Close and create a new one.')}
         </p>
         <button className="primary" onClick={onClose}>
-          Klar
+          {t('Done')}
         </button>
       </div>
     </div>

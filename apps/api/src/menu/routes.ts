@@ -6,7 +6,8 @@ import { withTenant } from '../db/tenant';
 import { HttpError } from '../errors';
 import { registerParams } from '../http-schemas';
 
-const UNGROUPED = 'Övrigt';
+// Items without a group come last under a group with no name; the till labels it.
+const UNGROUPED = '';
 
 interface RegisterRow {
   designation: string;
@@ -63,7 +64,7 @@ export function menuRoutes(app: FastifyInstance, deps: AppDeps) {
           register: { id: registerId, designation: register.designation, status: register.status },
           restaurant: { name: register.restaurant_name },
           seller: { legalName: register.legal_name, orgNumber: register.org_number },
-          groups: [...groups].map(([name, items]) => ({ name, articles: items })),
+          groups: [...groups].map(([name, items]) => ({ name: name || null, articles: items })),
         };
       });
     },

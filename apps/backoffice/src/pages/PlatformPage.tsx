@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { api, type CompanyStatus } from '../api';
 import { formatDateTime, formatKr, formatOrgNumber, STATUS_LABELS } from '../format';
+import { useT } from '../i18n';
 import { useAction, useLoad } from '../useLoad';
 
 const FILTERS: (CompanyStatus | 'all')[] = ['pending', 'active', 'suspended', 'all'];
 
 /** Platform console: every company's status and usage. No receipts, menus or staff details. */
 export function PlatformPage() {
+  const t = useT();
   const { data, error, reload } = useLoad(() => api.platformCompanies(), []);
   const action = useAction();
   const [filter, setFilter] = useState<CompanyStatus | 'all'>('all');
@@ -15,7 +17,10 @@ export function PlatformPage() {
   const count = (s: CompanyStatus) => data?.filter((c) => c.status === s).length ?? 0;
 
   async function change(tenantId: string, act: 'approve' | 'suspend' | 'reactivate', name: string) {
-    if (act === 'suspend' && !window.confirm(`Stäng av ${name}? Kassorna slutar sälja direkt.`))
+    if (
+      act === 'suspend' &&
+      !window.confirm(t('Suspend {name}? Its registers stop selling at once.', { name }))
+    )
       return;
     if (await action.run(() => api.setCompanyStatus(tenantId, act))) reload();
   }
@@ -23,19 +28,19 @@ export function PlatformPage() {
   return (
     <section>
       <header className="page-header">
-        <h1>Plattform</h1>
+        <h1>{t('Platform')}</h1>
       </header>
       <div className="stat-row">
         <div className="stat">
-          <span className="muted small">Väntar på godkännande</span>
+          <span className="muted small">{t('Waiting for approval')}</span>
           <strong>{count('pending')}</strong>
         </div>
         <div className="stat">
-          <span className="muted small">Aktiva företag</span>
+          <span className="muted small">{t('Active companies')}</span>
           <strong>{count('active')}</strong>
         </div>
         <div className="stat">
-          <span className="muted small">Försäljning 30 dagar</span>
+          <span className="muted small">{t('Sales, 30 days')}</span>
           <strong>{formatKr(data?.reduce((s, c) => s + c.sales30dOre, 0) ?? 0)}</strong>
         </div>
       </div>
@@ -43,25 +48,25 @@ export function PlatformPage() {
       <div className="tabs">
         {FILTERS.map((f) => (
           <button key={f} className={filter === f ? 'active' : ''} onClick={() => setFilter(f)}>
-            {f === 'all' ? 'Alla' : STATUS_LABELS[f]} {f !== 'all' && `(${count(f)})`}
+            {f === 'all' ? t('All') : t(STATUS_LABELS[f])} {f !== 'all' && `(${count(f)})`}
           </button>
         ))}
       </div>
 
-      {(error || action.error) && <p className="error">{error ?? action.error}</p>}
+      {(error || action.error) && <p className="error">{t((error ?? action.error)!)}</p>}
       <div className="card">
         <table>
           <thead>
             <tr>
-              <th>Företag</th>
-              <th>Ägare</th>
-              <th>Status</th>
-              <th className="num">Restauranger</th>
-              <th className="num">Kassor</th>
-              <th className="num">Enheter</th>
-              <th className="num">Personal</th>
-              <th>Senaste försäljning</th>
-              <th className="num">30 dagar</th>
+              <th>{t('Company')}</th>
+              <th>{t('Owner')}</th>
+              <th>{t('Status')}</th>
+              <th className="num">{t('Restaurants')}</th>
+              <th className="num">{t('Registers')}</th>
+              <th className="num">{t('Devices')}</th>
+              <th className="num">{t('Staff')}</th>
+              <th>{t('Last sale')}</th>
+              <th className="num">{t('30 days')}</th>
               <th />
             </tr>
           </thead>
@@ -71,7 +76,8 @@ export function PlatformPage() {
                 <td>
                   <strong>{c.legalName}</strong>
                   <div className="muted small">
-                    {formatOrgNumber(c.orgNumber)} · reg. {formatDateTime(c.createdAt)}
+                    {formatOrgNumber(c.orgNumber)} ·{' '}
+                    {t('signed up {date}', { date: formatDateTime(c.createdAt) })}
                   </div>
                 </td>
                 <td>
@@ -79,12 +85,12 @@ export function PlatformPage() {
                   <div className="muted small">
                     {c.owner?.email}{' '}
                     {c.owner && !c.owner.emailVerified && (
-                      <span className="badge badge-pending">Ej bekräftad</span>
+                      <span className="badge badge-pending">{t('Not confirmed')}</span>
                     )}
                   </div>
                 </td>
                 <td>
-                  <span className={`badge badge-${c.status}`}>{STATUS_LABELS[c.status]}</span>
+                  <span className={`badge badge-${c.status}`}>{t(STATUS_LABELS[c.status])}</span>
                 </td>
                 <td className="num">{c.restaurants}</td>
                 <td className="num">
@@ -103,7 +109,7 @@ export function PlatformPage() {
                       disabled={action.busy}
                       onClick={() => change(c.tenantId, 'approve', c.legalName)}
                     >
-                      Godkänn
+                      {t('Approve')}
                     </button>
                   )}
                   {c.status === 'active' && (
@@ -112,7 +118,7 @@ export function PlatformPage() {
                       disabled={action.busy}
                       onClick={() => change(c.tenantId, 'suspend', c.legalName)}
                     >
-                      Stäng av
+                      {t('Suspend')}
                     </button>
                   )}
                   {c.status === 'suspended' && (
@@ -121,7 +127,7 @@ export function PlatformPage() {
                       disabled={action.busy}
                       onClick={() => change(c.tenantId, 'reactivate', c.legalName)}
                     >
-                      Återaktivera
+                      {t('Reactivate')}
                     </button>
                   )}
                 </td>
@@ -130,7 +136,7 @@ export function PlatformPage() {
             {companies.length === 0 && (
               <tr>
                 <td colSpan={10} className="muted">
-                  Inga företag här.
+                  {t('No companies here.')}
                 </td>
               </tr>
             )}

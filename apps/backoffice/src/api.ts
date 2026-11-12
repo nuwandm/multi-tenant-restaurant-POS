@@ -109,20 +109,20 @@ export interface PlatformCompany {
 }
 
 const ERROR_TEXT: Record<string, string> = {
-  invalid_login: 'Fel e-post eller lösenord.',
-  login_locked: 'För många misslyckade försök. Vänta 15 minuter.',
-  no_backoffice_access: 'Kontot har ingen åtkomst till back office.',
-  not_logged_in: 'Du är utloggad. Logga in igen.',
-  email_taken: 'Det finns redan ett konto med den e-postadressen.',
-  org_number_taken: 'Företaget är redan registrerat.',
-  invalid_org_number: 'Organisationsnumret är inte giltigt.',
-  designation_taken: 'Det kassanamnet används redan.',
-  forbidden: 'Du har inte behörighet att göra detta.',
-  cannot_change_self: 'Du kan inte inaktivera dig själv eller ändra din egen roll.',
-  cashier_no_password: 'Kassörer använder bara kassan och får inget lösenord.',
-  invalid_token: 'Länken är fel, redan använd eller har gått ut.',
-  register_not_found: 'Kassan finns inte eller är avregistrerad.',
-  company_not_found: 'Företaget hittades inte.',
+  invalid_login: 'Wrong email or password.',
+  login_locked: 'Too many failed attempts. Wait 15 minutes.',
+  no_backoffice_access: 'This account has no back office access.',
+  not_logged_in: 'You are logged out. Please log in again.',
+  email_taken: 'An account with this email already exists.',
+  org_number_taken: 'This company is already registered.',
+  invalid_org_number: 'That organisation number is not valid.',
+  designation_taken: 'That register name is already used.',
+  forbidden: 'You are not allowed to do this.',
+  cannot_change_self: 'You cannot deactivate yourself or change your own role.',
+  cashier_no_password: 'Cashiers use the till only and get no password.',
+  invalid_token: 'The link is wrong, already used or expired.',
+  register_not_found: 'The register does not exist or is retired.',
+  company_not_found: 'Company not found.',
 };
 
 const TOKEN_KEY = 'backoffice.token';
@@ -164,7 +164,7 @@ async function request<T>(method: string, path: string, body?: object): Promise<
       ...(body && { body: JSON.stringify(body) }),
     });
   } catch {
-    throw new Error('Ingen kontakt med servern. Kontrollera att API:t körs (pnpm dev:api).');
+    throw new Error('Cannot reach the server. Check that the API is running (pnpm dev:api).');
   }
   const data = (await res.json().catch(() => null)) as { error?: string; message?: string } | null;
   if (!res.ok) {
@@ -173,7 +173,7 @@ async function request<T>(method: string, path: string, body?: object): Promise<
       onLoggedOut();
     }
     throw new Error(
-      (data?.error && ERROR_TEXT[data.error]) ?? data?.message ?? `Serverfel (${res.status})`,
+      (data?.error && ERROR_TEXT[data.error]) ?? data?.message ?? `Server error (${res.status})`,
     );
   }
   return data as T;

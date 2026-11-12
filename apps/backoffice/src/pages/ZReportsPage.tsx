@@ -1,27 +1,29 @@
 import { api } from '../api';
 import { formatDateTime, formatKr } from '../format';
+import { useT } from '../i18n';
 import { useLoad } from '../useLoad';
 
 export function ZReportsPage({ tenantId }: { tenantId: string }) {
+  const t = useT();
   const { data, error } = useLoad(() => api.zReports(tenantId), [tenantId]);
   return (
     <section>
       <header className="page-header">
-        <h1>Z-rapporter</h1>
+        <h1>{t('Z reports')}</h1>
       </header>
-      {error && <p className="error">{error}</p>}
+      {error && <p className="error">{t(error)}</p>}
       <div className="card">
         <table>
           <thead>
             <tr>
-              <th>Restaurang</th>
-              <th>Kassa</th>
-              <th className="num">Z nr</th>
+              <th>{t('Restaurant')}</th>
+              <th>{t('Register name')}</th>
+              <th className="num">{t('Z no.')}</th>
               <th>Period</th>
-              <th className="num">Kvitton</th>
-              <th className="num">Försäljning</th>
-              <th className="num">Returer</th>
-              <th className="num">Netto</th>
+              <th className="num">{t('Receipts')}</th>
+              <th className="num">{t('Sales')}</th>
+              <th className="num">{t('Returns')}</th>
+              <th className="num">{t('Net')}</th>
               <th className="num">Grand total</th>
             </tr>
           </thead>
@@ -46,7 +48,7 @@ export function ZReportsPage({ tenantId }: { tenantId: string }) {
             {data?.length === 0 && (
               <tr>
                 <td colSpan={9} className="muted">
-                  Inga Z-rapporter än. De tas i kassan när dagen stängs.
+                  {t('No Z reports yet. They are taken at the till when the day is closed.')}
                 </td>
               </tr>
             )}

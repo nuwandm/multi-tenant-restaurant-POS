@@ -9,6 +9,7 @@ import {
   type Receipt,
 } from './api';
 import { formatDateTime, formatKr, PAYMENT_LABELS } from './format';
+import { useT } from './i18n';
 
 interface Props {
   onDone: (receipt: Receipt) => void;
@@ -18,10 +19,10 @@ interface Props {
 }
 
 export const KIND_LABELS: Record<Receipt['kind'], string> = {
-  sale: 'Försäljning',
-  return: 'Retur',
-  copy: 'Kopia',
-  training: 'Träning',
+  sale: 'Sale',
+  return: 'Return',
+  copy: 'Copy',
+  training: 'Training',
   proforma: 'Proforma',
 };
 
@@ -29,6 +30,7 @@ const message = (err: unknown) => (err instanceof Error ? err.message : String(e
 
 /** Recent receipts on this register: print a copy, or return all or part of a sale. */
 export function ReceiptsDialog({ onDone, onClose, canReturn }: Props) {
+  const t = useT();
   const [receipts, setReceipts] = useState<ListedReceipt[] | null>(null);
   const [selected, setSelected] = useState<ListedReceipt | null>(null);
   const [returning, setReturning] = useState(false);
@@ -56,29 +58,34 @@ export function ReceiptsDialog({ onDone, onClose, canReturn }: Props) {
   }
 
   return (
-    <div className="overlay" role="dialog" aria-modal="true" aria-label="Kvitton">
+    <div className="overlay" role="dialog" aria-modal="true" aria-label={t('Receipts')}>
       <div className="dialog wide">
         <div className="dialog-header">
           <h2>
-            {selected ? `${KIND_LABELS[selected.kind]} nr ${selected.receiptNumber}` : 'Kvitton'}
+            {selected
+              ? t('{kind} no. {number}', {
+                  kind: t(KIND_LABELS[selected.kind]),
+                  number: selected.receiptNumber,
+                })
+              : t('Receipts')}
           </h2>
           <button
             type="button"
             className="link"
             onClick={selected ? () => setSelected(null) : onClose}
           >
-            {selected ? '← Tillbaka' : 'Stäng'}
+            {selected ? t('← Back') : t('Close')}
           </button>
         </div>
 
         {error && (
           <p className="error" role="alert">
-            {error}
+            {t(error)}
           </p>
         )}
 
-        {!selected && !receipts && !error && <p className="muted">Laddar…</p>}
-        {!selected && receipts?.length === 0 && <p className="muted">Inga kvitton ännu.</p>}
+        {!selected && !receipts && !error && <p className="muted">{t('Loading…')}</p>}
+        {!selected && receipts?.length === 0 && <p className="muted">{t('No receipts yet.')}</p>}
         {!selected && receipts && receipts.length > 0 && (
           <ul className="receipt-list">
             {receipts.map((r) => (
@@ -92,8 +99,8 @@ export function ReceiptsDialog({ onDone, onClose, canReturn }: Props) {
                     setError(null);
                   }}
                 >
-                  <span className={`kind kind-${r.kind}`}>{KIND_LABELS[r.kind]}</span>
-                  <span>nr {r.receiptNumber}</span>
+                  <span className={`kind kind-${r.kind}`}>{t(KIND_LABELS[r.kind])}</span>
+                  <span>{t('no. {number}', { number: r.receiptNumber })}</span>
                   <span className="muted">{formatDateTime(r.createdAt)}</span>
                   <span className="amount">{formatKr(r.totalOre)}</span>
                 </button>
@@ -112,7 +119,7 @@ export function ReceiptsDialog({ onDone, onClose, canReturn }: Props) {
                     {(selected.returnedQuantities[l.lineNo] ?? 0) > 0 && (
                       <span className="muted">
                         {' '}
-                        (returnerat {selected.returnedQuantities[l.lineNo]})
+                        {t('(returned {count})', { count: selected.returnedQuantities[l.lineNo]! })}
                       </span>
                     )}
                   </span>
@@ -121,7 +128,7 @@ export function ReceiptsDialog({ onDone, onClose, canReturn }: Props) {
               ))}
             </ul>
             <p className="row grand-total">
-              <span>Totalt</span>
+              <span>{t('Total')}</span>
               <span>{formatKr(selected.totalOre)}</span>
             </p>
             <div className="dialog-actions">
@@ -131,16 +138,16 @@ export function ReceiptsDialog({ onDone, onClose, canReturn }: Props) {
                 disabled={busy || selected.kind === 'copy'}
                 onClick={() => run(() => createCopy(selected.id, attemptKey))}
               >
-                Skriv kopia
+                {t('Print copy')}
               </button>
               <button
                 type="button"
                 className="primary"
                 disabled={busy || selected.kind !== 'sale' || !canReturn}
-                title={canReturn ? undefined : 'Endast chef eller ägare'}
+                title={canReturn ? undefined : t('Managers and owners only')}
                 onClick={() => setReturning(true)}
               >
-                Retur…
+                {t('Return…')}
               </button>
             </div>
           </>
@@ -180,6 +187,7 @@ interface ReturnFormProps {
 }
 
 function ReturnForm({ original, busy, onSubmit }: ReturnFormProps) {
+  const t = useT();
   const [quantities, setQuantities] = useState<Record<number, number>>({});
   const [method, setMethod] = useState<PaymentMethod>(original.payments[0]?.method ?? 'card');
 
@@ -205,14 +213,14 @@ function ReturnForm({ original, busy, onSubmit }: ReturnFormProps) {
           return (
             <li key={l.lineNo} className="return-line">
               <span>
-                {l.name} <span className="muted">({left} kvar)</span>
+                {l.name} <span className="muted">{t('({count} left)', { count: left })}</span>
               </span>
               <span className="qty">
                 <button
                   type="button"
                   disabled={q === 0}
                   onClick={() => set(q - 1)}
-                  aria-label="Färre"
+                  aria-label={t('Fewer')}
                 >
                   −
                 </button>
@@ -221,7 +229,7 @@ function ReturnForm({ original, busy, onSubmit }: ReturnFormProps) {
                   type="button"
                   disabled={q >= left}
                   onClick={() => set(q + 1)}
-                  aria-label="Fler"
+                  aria-label={t('More')}
                 >
                   +
                 </button>
@@ -231,7 +239,7 @@ function ReturnForm({ original, busy, onSubmit }: ReturnFormProps) {
         })}
       </ul>
 
-      <p className="muted small">Återbetala med</p>
+      <p className="muted small">{t('Refund with')}</p>
       <div className="method-choice">
         {(['card', 'swish', 'cash'] as const).map((m) => (
           <button
@@ -240,13 +248,13 @@ function ReturnForm({ original, busy, onSubmit }: ReturnFormProps) {
             className={m === method ? 'active' : ''}
             onClick={() => setMethod(m)}
           >
-            {PAYMENT_LABELS[m]}
+            {t(PAYMENT_LABELS[m])}
           </button>
         ))}
       </div>
 
       <p className="row grand-total">
-        <span>Återbetala</span>
+        <span>{t('Refund')}</span>
         <span>{formatKr(payOutOre)}</span>
       </p>
       <button
@@ -255,7 +263,7 @@ function ReturnForm({ original, busy, onSubmit }: ReturnFormProps) {
         disabled={busy || lines.length === 0}
         onClick={() => onSubmit(lines, method, -payOutOre)}
       >
-        {busy ? 'Signerar…' : 'Genomför retur'}
+        {busy ? t('Signing…') : t('Make return')}
       </button>
     </>
   );

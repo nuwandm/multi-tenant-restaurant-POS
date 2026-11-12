@@ -53,7 +53,7 @@ describe('GET /registers/:id/menu', () => {
       seller: { orgNumber: expect.stringMatching(/^\d{10}$/) },
       groups: [
         { name: 'Dryck', articles: [{ name: 'Vin glas', priceOre: 11500, vatRate: 25 }] },
-        { name: 'Övrigt', articles: [{ name: 'Pasta', priceOre: 14900, vatRate: 12 }] },
+        { name: null, articles: [{ name: 'Pasta', priceOre: 14900, vatRate: 12 }] },
       ],
     });
   });

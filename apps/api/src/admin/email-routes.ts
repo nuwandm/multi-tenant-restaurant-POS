@@ -51,10 +51,11 @@ export async function sendVerificationEmail(deps: AppDeps, userId: string): Prom
     return { ...u, token: await issueToken(tx, userId, 'verify_email') };
   });
   if (!user) return;
+  const link = `${deps.backofficeUrl}/#/verify?token=${user.token}`;
   await deps.mailer.send({
     to: user.email!,
-    subject: 'Bekräfta din e-postadress',
-    text: `Hej ${user.display_name}!\n\nBekräfta din e-postadress genom att öppna länken:\n${deps.backofficeUrl}/#/verify?token=${user.token}\n\nLänken gäller i ${VALID_HOURS.verify_email} timmar.`,
+    subject: 'Confirm your email address / Bekräfta din e-postadress',
+    text: `Hi ${user.display_name}!\n\nConfirm your email address by opening this link:\n${link}\n\nThe link is valid for ${VALID_HOURS.verify_email} hours.\n\n---\n\nHej ${user.display_name}!\n\nBekräfta din e-postadress genom att öppna länken:\n${link}\n\nLänken gäller i ${VALID_HOURS.verify_email} timmar.`,
   });
 }
 
@@ -113,10 +114,11 @@ export function emailRoutes(app: FastifyInstance, deps: AppDeps) {
         return user ? { ...user, token: await issueToken(tx, user.id, 'reset_password') } : null;
       });
       if (found) {
+        const link = `${deps.backofficeUrl}/#/reset?token=${found.token}`;
         await deps.mailer.send({
           to: found.email,
-          subject: 'Återställ ditt lösenord',
-          text: `Hej ${found.display_name}!\n\nÖppna länken för att välja ett nytt lösenord:\n${deps.backofficeUrl}/#/reset?token=${found.token}\n\nLänken gäller i en timme. Om du inte bad om detta kan du strunta i mejlet.`,
+          subject: 'Reset your password / Återställ ditt lösenord',
+          text: `Hi ${found.display_name}!\n\nOpen this link to choose a new password:\n${link}\n\nThe link is valid for one hour. If you did not ask for this, you can ignore this email.\n\n---\n\nHej ${found.display_name}!\n\nÖppna länken för att välja ett nytt lösenord:\n${link}\n\nLänken gäller i en timme. Om du inte bad om detta kan du strunta i mejlet.`,
         });
       }
       return reply.status(204).send();

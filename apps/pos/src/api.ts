@@ -18,7 +18,8 @@ export interface Menu {
   register: { id: string; designation: string; status: 'active' | 'retired' };
   restaurant: { name: string };
   seller: { legalName: string; orgNumber: string };
-  groups: { name: string; articles: Article[] }[];
+  /** name is null for items without a group. */
+  groups: { name: string | null; articles: Article[] }[];
 }
 
 export interface Receipt {
@@ -66,21 +67,21 @@ export class ApiError extends Error {
   }
 }
 
-/** Staff-facing Swedish text for the API's error codes; other errors show the API message. */
+/** Staff-facing text for the API's error codes, translated with t() where shown. */
 const ERROR_TEXT: Record<string, string> = {
-  invalid_pin: 'Fel PIN-kod.',
-  pin_locked: 'För många felaktiga försök. Vänta 5 minuter och försök igen.',
-  not_logged_in: 'Du är utloggad. Logga in igen.',
-  forbidden: 'Endast chef eller ägare får göra detta.',
-  wrong_register: 'Du är inloggad på en annan kassa.',
-  control_system_unavailable: 'Kontrollsystemet svarar inte. Inget kvitto skapades.',
-  register_retired: 'Kassan är avregistrerad.',
-  article_unavailable: 'En vara finns inte längre i menyn. Töm ordern och försök igen.',
+  invalid_pin: 'Wrong PIN.',
+  pin_locked: 'Too many wrong PINs. Wait 5 minutes and try again.',
+  not_logged_in: 'You are logged out. Please log in again.',
+  forbidden: 'Only a manager or owner can do this.',
+  wrong_register: 'You are logged in on another register.',
+  control_system_unavailable: 'The control system is not responding. No receipt was created.',
+  register_retired: 'This register is retired.',
+  article_unavailable: 'An item is no longer on the menu. Clear the order and try again.',
   company_pending:
-    'Företaget väntar på godkännande och kan inte sälja än. Träna gärna under tiden.',
-  company_suspended: 'Företaget är avstängt och kan inte sälja.',
-  invalid_pairing_code: 'Koden är fel, använd eller har gått ut. Skapa en ny i back office.',
-  device_not_paired: 'Den här enheten är inte kopplad till någon kassa.',
+    'The company is waiting for approval and cannot sell yet. Use training mode meanwhile.',
+  company_suspended: 'The company is suspended and cannot sell.',
+  invalid_pairing_code: 'The code is wrong, used or expired. Create a new one in the back office.',
+  device_not_paired: 'This device is not paired with a register.',
 };
 
 // Kept per device: the device token (which register this is) and the staff session token.
@@ -151,7 +152,7 @@ async function request<T>(
       },
     });
   } catch {
-    throw new ApiError('Ingen kontakt med servern. Kontrollera nätverket och försök igen.');
+    throw new ApiError('Cannot reach the server. Check the network and try again.');
   }
   const body = (await res.json().catch(() => null)) as { error?: string; message?: string } | null;
   if (!res.ok) {
@@ -163,7 +164,7 @@ async function request<T>(
       onLoggedOut();
     }
     const text =
-      (body?.error && ERROR_TEXT[body.error]) ?? body?.message ?? `Serverfel (${res.status})`;
+      (body?.error && ERROR_TEXT[body.error]) ?? body?.message ?? `Server error (${res.status})`;
     throw new ApiError(text, body?.error);
   }
   return body as T;

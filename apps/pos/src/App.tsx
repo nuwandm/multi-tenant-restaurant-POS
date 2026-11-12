@@ -13,6 +13,7 @@ import {
 } from './api';
 import { CashDialog } from './CashDialog';
 import { formatKr } from './format';
+import { LanguageToggle, useT } from './i18n';
 import { ReceiptsDialog } from './ReceiptsDialog';
 import { ReceiptView } from './ReceiptView';
 import { ReportDialog } from './ReportDialog';
@@ -31,6 +32,7 @@ interface Props {
 }
 
 export function App({ staff, companyStatus, onLogout }: Props) {
+  const t = useT();
   const manager = isManager(staff);
   // Until the company is approved the till can only train.
   const trainingOnly = companyStatus === 'pending';
@@ -138,10 +140,10 @@ export function App({ staff, companyStatus, onLogout }: Props) {
   if (loadError) {
     return (
       <div className="center-message">
-        <h1>Kassan kunde inte startas</h1>
-        <p>{loadError}</p>
+        <h1>{t('The till could not start')}</h1>
+        <p>{t(loadError)}</p>
         <p className="hint">
-          Har du laddat demodata?{' '}
+          {t('Have you loaded the demo data?')}{' '}
           <code>
             Get-Content apps/api/db/seed-dev.sql | docker compose exec -T postgres psql -U pos -d
             pos
@@ -150,7 +152,7 @@ export function App({ staff, companyStatus, onLogout }: Props) {
       </div>
     );
   }
-  if (!menu) return <div className="center-message">Laddar kassan…</div>;
+  if (!menu) return <div className="center-message">{t('Loading the till…')}</div>;
 
   const group = menu.groups[groupIndex];
   const total = preview?.totalOre ?? 0;
@@ -158,9 +160,7 @@ export function App({ staff, companyStatus, onLogout }: Props) {
 
   return (
     <div className={`till ${training ? 'training' : ''}`}>
-      {training && (
-        <div className="training-banner">TRÄNINGSLÄGE – försäljning räknas inte som riktig</div>
-      )}
+      {training && <div className="training-banner">{t('TRAINING MODE – sales are not real')}</div>}
 
       <header className="topbar">
         <div>
@@ -170,14 +170,14 @@ export function App({ staff, companyStatus, onLogout }: Props) {
         <div className="topbar-right">
           <div className="tools">
             <button type="button" onClick={() => setReceiptsOpen(true)}>
-              Kvitton
+              {t('Receipts')}
             </button>
             <button type="button" onClick={() => setReport('x')}>
-              X-rapport
+              {t('X report')}
             </button>
             {manager && (
               <button type="button" onClick={() => setReport('z')}>
-                Z-rapport
+                {t('Z report')}
               </button>
             )}
           </div>
@@ -188,35 +188,36 @@ export function App({ staff, companyStatus, onLogout }: Props) {
               disabled={basket.length > 0 || trainingOnly}
               onChange={(e) => setTraining(e.target.checked)}
             />
-            Träningsläge
+            {t('Training mode')}
           </label>
           <span className={`status ${online ? 'ok' : online === false ? 'down' : ''}`}>
             {online === null
-              ? 'Ansluter…'
+              ? t('Connecting…')
               : online
-                ? 'Kontrollsystem online'
-                : 'Kontrollsystem offline'}
+                ? t('Control system online')
+                : t('Control system offline')}
           </span>
+          <LanguageToggle />
           <span className="who">
             {staff.displayName}
             <button type="button" className="link" onClick={onLogout} disabled={busy}>
-              Logga ut
+              {t('Log out')}
             </button>
           </span>
         </div>
       </header>
 
       <main className="layout">
-        <section className="menu" aria-label="Meny">
+        <section className="menu" aria-label={t('Menu')}>
           <nav className="groups">
             {menu.groups.map((g, i) => (
               <button
-                key={g.name}
+                key={g.name ?? ''}
                 type="button"
                 className={i === groupIndex ? 'active' : ''}
                 onClick={() => setGroupIndex(i)}
               >
-                {g.name}
+                {g.name ?? t('Other')}
               </button>
             ))}
           </nav>
@@ -227,14 +228,14 @@ export function App({ staff, companyStatus, onLogout }: Props) {
                 <span className="article-price">{formatKr(a.priceOre)}</span>
               </button>
             ))}
-            {menu.groups.length === 0 && <p className="muted">Menyn är tom.</p>}
+            {menu.groups.length === 0 && <p className="muted">{t('The menu is empty.')}</p>}
           </div>
         </section>
 
-        <aside className="basket" aria-label="Order">
-          <h2>Order</h2>
+        <aside className="basket" aria-label={t('Order')}>
+          <h2>{t('Order')}</h2>
           {basket.length === 0 ? (
-            <p className="muted empty">Tryck på en rätt för att lägga till.</p>
+            <p className="muted empty">{t('Tap an item to add it.')}</p>
           ) : (
             <ul className="basket-lines">
               {basket.map((l) => (
@@ -243,7 +244,7 @@ export function App({ staff, companyStatus, onLogout }: Props) {
                   <span className="qty">
                     <button
                       type="button"
-                      aria-label={`Ta bort en ${l.article.name}`}
+                      aria-label={t('Remove one {name}', { name: l.article.name })}
                       onClick={() => changeQuantity(l.article.id, -1)}
                     >
                       −
@@ -251,7 +252,7 @@ export function App({ staff, companyStatus, onLogout }: Props) {
                     <span>{l.quantity}</span>
                     <button
                       type="button"
-                      aria-label={`Lägg till en ${l.article.name}`}
+                      aria-label={t('Add one {name}', { name: l.article.name })}
                       onClick={() => changeQuantity(l.article.id, 1)}
                     >
                       +
@@ -266,36 +267,36 @@ export function App({ staff, companyStatus, onLogout }: Props) {
           <div className="totals">
             {preview?.vatTotals.map((v) => (
               <p key={v.vatRate} className="row small muted">
-                <span>varav moms {v.vatRate}%</span>
+                <span>{t('incl. VAT {rate}%', { rate: v.vatRate })}</span>
                 <span>{formatKr(v.vatOre)}</span>
               </p>
             ))}
             <p className="row grand-total">
-              <span>Totalt</span>
+              <span>{t('Total')}</span>
               <span>{formatKr(total)}</span>
             </p>
           </div>
 
           {error && (
             <p className="error" role="alert">
-              {error}
+              {t(error)}
             </p>
           )}
 
           <div className="pay-buttons">
             <button type="button" disabled={!canPay} onClick={() => pay('card', total)}>
-              Kort
+              {t('Card')}
             </button>
             <button type="button" disabled={!canPay} onClick={() => pay('swish', total)}>
               Swish
             </button>
             <button type="button" disabled={!canPay} onClick={() => setCashOpen(true)}>
-              Kontant
+              {t('Cash')}
             </button>
           </div>
           {basket.length > 0 && (
             <button type="button" className="link" onClick={() => setBasket([])} disabled={busy}>
-              Töm order
+              {t('Clear order')}
             </button>
           )}
         </aside>
