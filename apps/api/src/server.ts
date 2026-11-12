@@ -1,8 +1,18 @@
 import { FakeControlSystem } from '@pos/control-system';
 import { buildApp } from './app';
+import { createSql } from './db/client';
+
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  console.error('DATABASE_URL is not set. Copy .env.example to .env.');
+  process.exit(1);
+}
 
 // The fake control system is replaced by the real provider adapter in Phase 4.
-const app = buildApp({ controlSystem: new FakeControlSystem() }, { logger: true });
+const app = buildApp(
+  { sql: createSql(databaseUrl), controlSystem: new FakeControlSystem() },
+  { logger: true },
+);
 
 const port = Number(process.env.API_PORT ?? 3000);
 

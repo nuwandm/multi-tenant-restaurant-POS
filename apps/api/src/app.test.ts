@@ -1,11 +1,16 @@
 import { FakeControlSystem } from '@pos/control-system';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
+import { testDatabaseUrl } from '../test/db';
 import { buildApp } from './app';
+import { createSql } from './db/client';
+
+const sql = createSql(testDatabaseUrl);
+afterAll(() => sql.end());
 
 describe('GET /health', () => {
   it('reports ok and the control system status', async () => {
     const controlSystem = new FakeControlSystem();
-    const app = buildApp({ controlSystem });
+    const app = buildApp({ sql, controlSystem });
 
     const res = await app.inject({ method: 'GET', url: '/health' });
 
@@ -16,7 +21,7 @@ describe('GET /health', () => {
   it('shows when the control system is offline', async () => {
     const controlSystem = new FakeControlSystem();
     controlSystem.setOnline(false);
-    const app = buildApp({ controlSystem });
+    const app = buildApp({ sql, controlSystem });
 
     const res = await app.inject({ method: 'GET', url: '/health' });
 

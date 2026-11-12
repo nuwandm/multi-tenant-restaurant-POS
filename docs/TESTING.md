@@ -14,6 +14,12 @@ Run these in a PowerShell terminal in the project folder.
    - Sections 3 and 4 show an `ERROR`. That is the expected result: receipts can't be edited and invalid org numbers are rejected.
 8. **Open the app:** run `pnpm dev:api` in one terminal and `pnpm dev:pos` in another, then open http://localhost:5173. You should see "Kassa" and "API ok · control system online". Stop with Ctrl+C.
 
+9. **Make a real sale through the API:**
+   - Load demo data once: `Get-Content apps/api/db/seed-dev.sql | docker compose exec -T postgres psql -U pos -d pos`
+   - Start the API: `pnpm dev:api`
+   - In a second terminal: `powershell -ExecutionPolicy Bypass -File apps/api/db/demo-sale.ps1`
+   - You get a printed receipt for Demo Restaurang AB: 332,50 kr, cash rounding 0,50 kr, paid 333 kr cash, and a control code. Run it again and the receipt number goes up by one.
+
 After the first time, `pnpm db:up` and `pnpm test` are enough.
 
 ## Troubleshooting
