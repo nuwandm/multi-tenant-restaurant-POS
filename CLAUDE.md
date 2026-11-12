@@ -29,7 +29,15 @@ Workspace packages are consumed as TypeScript source; there is no build step for
 ## Commands
 
 - `pnpm install`
-- `pnpm db:up` starts Postgres 16 on localhost:5433
+- `pnpm db:up` starts Postgres 16 on localhost:5433; `pnpm db:migrate` applies apps/api/db/migrations
+- API tests need Postgres running: they recreate a `pos_test` database on every run
+
+## Database conventions
+
+- Migrations are plain SQL in apps/api/db/migrations, numbered, never edited after merge. Add a new file instead.
+- Tenant data is accessed only through `withTenant(sql, tenantId, fn)` in apps/api/src/db/tenant.ts. It sets `SET LOCAL ROLE pos_app` and `app.tenant_id`, so RLS applies even on a superuser connection.
+- Child tables carry tenant_id and use composite foreign keys (tenant_id, parent_id).
+- Money columns end in `_ore` and are bigint.
 - `pnpm dev:api` / `pnpm dev:pos` / `pnpm dev:backoffice`
 - `pnpm lint && pnpm typecheck && pnpm test` must pass before a task is done
 

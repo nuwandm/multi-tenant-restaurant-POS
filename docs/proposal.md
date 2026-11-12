@@ -120,14 +120,14 @@ The tills run as a PWA on tablets and talk to the API. Signing uses a certified 
 
 ## Data model
 
-Every table that holds sales data carries `tenant_id`, and PostgreSQL row-level security enforces it. Primary keys are generated UUIDs. The organisation number is a unique, validated attribute, never a key.
+Every tenant-owned table carries `tenant_id`, including child tables such as `receipt_lines` and `payments`, and PostgreSQL row-level security enforces it. Child rows reference their parent by (`tenant_id`, `id`), so a row can never point at another tenant's data. The schema is in `apps/api/db/migrations`. Primary keys are generated UUIDs. The organisation number is a unique, validated attribute, never a key.
 
 | Table | Purpose | Key columns and rules |
 | --- | --- | --- |
 | `tenants` | One row per restaurant company | `id` UUID PK, `legal_name`, `org_number` (unique, Luhn-checked), `vat_number`, `status` |
 | `restaurants` | A physical site under a tenant | `id`, `tenant_id`, `name`, `address`. One tenant can own more than one site later. |
 | `cash_registers` | One registration unit | `id`, `tenant_id`, `restaurant_id`, `designation` (kassabeteckning, unique per tenant), `control_system_ref`, `status` (active, retired), `registered_with_skv_at` |
-| `receipt_series` | The numbering counter for one register | `register_id` PK, `next_number`. Incremented with `SELECT … FOR UPDATE` in the same transaction as the receipt, so there are no gaps or duplicates. |
+| `register_sequences` | Gapless counters for one register | (`register_id`, `name`) PK, `next_value`. One row per series: `receipt:<kind>`, `z_report`, `journal`. Incremented with `SELECT … FOR UPDATE` in the same transaction as the row that uses the number, so there are no gaps or duplicates. |
 | `receipts` | Sale, return, copy, training or proforma | `id`, `tenant_id`, `register_id`, `receipt_number`, `type`, `created_at`, `total_incl_vat`, `control_code`, `signed_at`. Unique on (`register_id`, `type`, `receipt_number`). No UPDATE or DELETE is granted. |
 | `receipt_lines` | Items on a receipt | `receipt_id`, `article_id`, `quantity`, `unit_price`, `vat_rate`, `discount` |
 | `receipt_vat_totals` | VAT per rate per receipt | `receipt_id`, `vat_rate`, `net`, `vat` |

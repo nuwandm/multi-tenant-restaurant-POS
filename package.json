@@ -15,7 +15,8 @@
     "test": "pnpm -r test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "db:up": "docker compose up -d postgres",
+    "db:up": "docker compose up -d --wait postgres",
+    "db:migrate": "pnpm --filter @pos/api db:migrate",
     "db:down": "docker compose down"
   },
   "devDependencies": {
