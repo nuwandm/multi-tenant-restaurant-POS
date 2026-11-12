@@ -539,3 +539,24 @@ textarea {
   font-size: 1.1rem;
   font-weight: 700;
 }
+
+/* Swish QR code: always dark on white so phones can scan it, also in dark mode. */
+.swish-qr {
+  width: 240px;
+  height: 240px;
+  padding: 14px;
+  border-radius: var(--mantine-radius-lg);
+  background: #fff;
+  border: 1px solid var(--app-line);
+  color: #111;
+}
+
+.swish-qr img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.swish-qr[data-done='true'] {
+  border-color: var(--mantine-color-teal-4);
+}

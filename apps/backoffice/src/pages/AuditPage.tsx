@@ -19,6 +19,7 @@ import { TableSkeleton } from './TableSkeleton';
 const ACTION_LABELS: Record<string, string> = {
   'company.signup': 'Registered the company',
   'restaurant.create': 'Added a restaurant',
+  'restaurant.update': 'Changed a restaurant',
   'register.create': 'Added a register',
   'register.retire': 'Retired a register',
   'device.pairing_code': 'Created a pairing code',

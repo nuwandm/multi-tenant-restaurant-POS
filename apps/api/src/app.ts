@@ -8,6 +8,8 @@ import { HttpError } from './errors';
 import { ConsoleMailer, type Mailer } from './mail/mailer';
 import { menuRoutes } from './menu/routes';
 import { reportRoutes } from './reports/routes';
+import { swishRoutes } from './payments/routes';
+import { SimulatedSwish, type SwishClient } from './payments/swish';
 import { orderRoutes } from './sales/order-routes';
 import { salesRoutes } from './sales/routes';
 
@@ -15,16 +17,19 @@ export interface AppDeps {
   sql: Sql;
   controlSystem: ControlSystem;
   mailer: Mailer;
+  /** Swish Handel; the simulator unless SWISH_MODE says otherwise. */
+  swish: SwishClient;
   /** Base URL of the back office, used in email links. */
   backofficeUrl: string;
 }
 
 export function buildApp(
-  input: Omit<AppDeps, 'mailer' | 'backofficeUrl'> & Partial<AppDeps>,
+  input: Omit<AppDeps, 'mailer' | 'backofficeUrl' | 'swish'> & Partial<AppDeps>,
   options: FastifyServerOptions = {},
 ) {
   const deps: AppDeps = {
     mailer: new ConsoleMailer(),
+    swish: new SimulatedSwish(),
     backofficeUrl: process.env.BACKOFFICE_URL ?? 'http://localhost:5174',
     ...input,
   };
@@ -61,6 +66,7 @@ export function buildApp(
   salesRoutes(app, deps);
   orderRoutes(app, deps);
   reportRoutes(app, deps);
+  swishRoutes(app, deps);
 
   return app;
 }

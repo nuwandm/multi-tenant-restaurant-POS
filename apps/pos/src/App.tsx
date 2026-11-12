@@ -94,9 +94,12 @@ import { ReceiptsDialog } from './ReceiptsDialog';
 import { ReceiptView } from './ReceiptView';
 import { ReportDialog } from './ReportDialog';
 import { SplitDialog } from './SplitDialog';
+import { SwishDialog } from './SwishDialog';
 import { TablesDialog } from './TablesDialog';
 
-type Payment = { method: PaymentMethod; amountOre: number };
+type Payment = { method: PaymentMethod; amountOre: number; swishPaymentId?: string };
+type ChargeOptions = { subset?: BasketLine[]; changeOre?: number; busyKey: string };
+type PaidSwish = { id: string; amountOre: number };
 
 /** The table order on screen: saved on the server as it changes. */
 interface ActiveOrder {
@@ -178,9 +181,18 @@ export function App({ staff, device, onLogout }: Props) {
     | { kind: 'discount' }
     | { kind: 'split' }
     | { kind: 'tables' }
+    | { kind: 'swish'; payments: Payment[]; opts: ChargeOptions }
     | null
   >(null);
   const [kitchen, setKitchen] = useState(false);
+  // Swish money the guest has paid that is not on a receipt yet, e.g. because making the
+  // receipt failed. The next Swish charge for the same amount uses it instead of a new QR code.
+  const paidSwish = useRef<PaidSwish[]>([]);
+  const [unusedSwish, setUnusedSwish] = useState<PaidSwish[]>([]);
+  const setPaidSwish = (list: PaidSwish[]) => {
+    paidSwish.current = list;
+    setUnusedSwish(list);
+  };
   // Set when the basket was just loaded from the server, so that load isn't saved back.
   const fromServer = useRef(false);
 
@@ -337,11 +349,30 @@ export function App({ staff, device, onLogout }: Props) {
     }
   }
 
+  /**
+   * Takes payment. Where the restaurant has Swish set up, Swish amounts are collected through a
+   * QR code first, and the receipt is made only once Swish has confirmed them.
+   */
+  function pay(payments: Payment[], opts: ChargeOptions) {
+    const needsSwish = (p: Payment) => p.method === 'swish' && !p.swishPaymentId;
+    if (!menu?.restaurant.swish || training || !payments.some(needsSwish)) {
+      return charge(payments, opts);
+    }
+    const pool = [...paidSwish.current];
+    const filled = payments.map((p) => {
+      if (!needsSwish(p)) return p;
+      const i = pool.findIndex((x) => x.amountOre === p.amountOre);
+      if (i < 0) return p;
+      const [match] = pool.splice(i, 1);
+      return { ...p, swishPaymentId: match!.id };
+    });
+    if (!filled.some(needsSwish)) return charge(filled, opts);
+    setError(null);
+    setDialog({ kind: 'swish', payments: filled, opts });
+  }
+
   /** Makes the receipt. `subset` pays only part of the order (split by items). */
-  async function charge(
-    payments: Payment[],
-    opts: { subset?: BasketLine[]; changeOre?: number; busyKey: string },
-  ) {
+  async function charge(payments: Payment[], opts: ChargeOptions) {
     setBusy(opts.busyKey);
     setError(null);
     const lines = opts.subset ?? basket;
@@ -370,6 +401,8 @@ export function App({ staff, device, onLogout }: Props) {
       }
       const receipt = await createReceipt(body, attempt.current.key);
       attempt.current = null;
+      const used = new Set(payments.map((p) => p.swishPaymentId));
+      setPaidSwish(paidSwish.current.filter((p) => !used.has(p.id)));
       setDialog(null);
       setDone({ receipt, changeOre: opts.changeOre ?? 0 });
       if (order) await reloadOrder(order.id);
@@ -871,6 +904,16 @@ export function App({ staff, device, onLogout }: Props) {
                   {t(error)}
                 </Alert>
               )}
+              {unusedSwish.length > 0 && dialog === null && (
+                <Alert color="orange" variant="light" py="xs" icon={<IconDeviceMobile size={18} />}>
+                  {t(
+                    'Swish has paid {amount} that is not on a receipt yet. Charge Swish for the same amount to use it.',
+                    {
+                      amount: unusedSwish.map((p) => formatKr(p.amountOre)).join(', '),
+                    },
+                  )}
+                </Alert>
+              )}
               {online === false && (
                 <Alert color="red" variant="light" py="xs">
                   {t('The control system is not responding. No receipt was created.')}
@@ -899,7 +942,7 @@ export function App({ staff, device, onLogout }: Props) {
                 loading={busy === 'card'}
                 disabled={!canPay}
                 leftSection={<IconCreditCard size={24} stroke={1.7} />}
-                onClick={() => charge([{ method: 'card', amountOre: total }], { busyKey: 'card' })}
+                onClick={() => pay([{ method: 'card', amountOre: total }], { busyKey: 'card' })}
               >
                 {basket.length === 0
                   ? t('Card')
@@ -913,9 +956,7 @@ export function App({ staff, device, onLogout }: Props) {
                   loading={busy === 'swish'}
                   disabled={!canPay}
                   leftSection={<IconDeviceMobile size={19} stroke={1.7} />}
-                  onClick={() =>
-                    charge([{ method: 'swish', amountOre: total }], { busyKey: 'swish' })
-                  }
+                  onClick={() => pay([{ method: 'swish', amountOre: total }], { busyKey: 'swish' })}
                 >
                   {t('Swish')}
                 </Button>
@@ -963,7 +1004,7 @@ export function App({ staff, device, onLogout }: Props) {
           totalOre={total}
           busy={busy === 'cash'}
           onPay={(amountOre, changeOre) =>
-            charge([{ method: 'cash', amountOre }], { changeOre, busyKey: 'cash' })
+            pay([{ method: 'cash', amountOre }], { changeOre, busyKey: 'cash' })
           }
           onCancel={() => setDialog(null)}
         />
@@ -1012,13 +1053,23 @@ export function App({ staff, device, onLogout }: Props) {
           totalOre={total}
           busy={busy !== null}
           onClose={() => setDialog(null)}
-          onPayParts={(payments) => charge(payments, { busyKey: 'split' })}
+          onPayParts={(payments) => pay(payments, { busyKey: 'split' })}
           onPayItems={(quantities, method) => {
             const subset = subsetOf(basket, quantities);
             const subtotal = previewOf(subset, 0)?.totalOre ?? 0;
             const amountOre = method === 'cash' ? roundToKrona(ore(subtotal)) : subtotal;
-            void charge([{ method, amountOre }], { subset, busyKey: 'split' });
+            void pay([{ method, amountOre }], { subset, busyKey: 'split' });
           }}
+        />
+      )}
+      {dialog?.kind === 'swish' && (
+        <SwishDialog
+          amounts={dialog.payments
+            .filter((p) => p.method === 'swish' && !p.swishPaymentId)
+            .map((p) => p.amountOre)}
+          onPaid={(p) => setPaidSwish([...paidSwish.current, p])}
+          onDone={() => void pay(dialog.payments, dialog.opts)}
+          onClose={() => setDialog(null)}
         />
       )}
       {dialog?.kind === 'tables' && (

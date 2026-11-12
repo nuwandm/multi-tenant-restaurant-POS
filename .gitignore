@@ -6,3 +6,8 @@ coverage/
 .env.*
 !.env.example
 .DS_Store
+
+# Swish and other client certificates: secrets, never commit.
+certs/
+*.p12
+*.pfx

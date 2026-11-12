@@ -41,6 +41,12 @@ Run these in a PowerShell terminal in the project folder.
     - **Split bill:** with a table open, **Split** → _By items_ to pay part of the order (the rest stays on the table), or _By amount_ to pay with card plus cash. Pay the last part and the table becomes free.
     - **Reports:** back office → **Sales** shows totals, sales per day and hour, payment methods, best sellers and VAT for today, 7 days, 30 days or this month.
 
+13. **Swish by QR code (run `pnpm db:migrate` first):**
+    - Back office → **Restaurants & registers** → **Add Swish number** → `1231181189` (any 10 digits starting with 123 work in the simulator).
+    - Till: reload the page, add items, tap **Swish**. A QR code appears and the till waits. Tap **Guest pays** in the simulator box: the receipt is made. Try **Guest declines** and **Cancel payment** too.
+    - **Split** → _By amount_ with one Swish part and one cash part: the QR code is shown for the Swish part only.
+    - No money moves: `SWISH_MODE` is `simulator` unless you set it (see `.env.example`).
+
 After the first time, `pnpm db:up` and `pnpm test` are enough.
 
 ## Troubleshooting

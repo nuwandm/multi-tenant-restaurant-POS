@@ -11,6 +11,7 @@ import type { Sql, TransactionSql } from 'postgres';
 import type { StaffSession } from '../auth/session';
 import { withTenant } from '../db/tenant';
 import { HttpError } from '../errors';
+import { claimSwishPayments } from '../payments/swish-payments';
 import { loadReceipts, type LoadedReceipt } from './load-receipts';
 import { consumeOpenOrder } from './open-orders';
 import { createKitchenTickets, priceLines, type LineRequest, type PricedLine } from './pricing';
@@ -19,13 +20,15 @@ import { storeReceipt, type StoredReceipt } from './store-receipt';
 
 type Deps = { sql: Sql; controlSystem: ControlSystem };
 type PaymentRequest = { method: PaymentMethod; amountOre: number }[];
+/** A sale's payments; a Swish payment names the payment Swish confirmed. */
+type SalePaymentRequest = { method: PaymentMethod; amountOre: number; swishPaymentId?: string }[];
 
 export interface CreateReceiptRequest {
   kind: 'sale' | 'training' | 'proforma';
   /** Prices, names and VAT rates come from the menu; the client sends only what and how many. */
   lines: LineRequest[];
   orderDiscountOre?: number;
-  payments: PaymentRequest;
+  payments: SalePaymentRequest;
   /** Paying (part of) an open order: the sold lines come off it, in the same transaction. */
   openOrderId?: string;
 }
@@ -92,6 +95,7 @@ export async function createReceipt(
   const training = request.kind === 'training';
   return onceOnRegister(deps, staff, idempotencyKey, training, async (tx, register) => {
     const priced = await priceLines(tx, register.restaurantId, request.lines);
+    const linkSwish = await claimSwishPayments(tx, staff, request.kind, request.payments);
     const built = buildReceipt({
       kind: request.kind,
       lines: priced,
@@ -103,6 +107,7 @@ export async function createReceipt(
       // Paid items go to the kitchen: everything on a quick sale, or what an open order hadn't
       // sent yet. Proforma receipts are only quotes and send nothing.
       after: async (stored) => {
+        await linkSwish(stored.id);
         if (request.kind === 'proforma') return;
         let label = `#${stored.receiptNumber}`;
         let toKitchen: PricedLine[] = priced;

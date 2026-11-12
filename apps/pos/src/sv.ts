@@ -238,4 +238,32 @@ export const sv: Record<string, string> = {
   '…': '…',
   '← Back': '← Tillbaka',
   '← Change person': '← Byt person',
+  'Ask the guest to scan the code with the Swish app.': 'Be gästen skanna koden med Swish-appen.',
+  'Cancel payment': 'Avbryt betalningen',
+  'Could not reach Swish. Try again or use another method.':
+    'Kunde inte nå Swish. Försök igen eller använd ett annat betalsätt.',
+  'Guest declines': 'Gästen nekar',
+  'Guest pays': 'Gästen betalar',
+  Paid: 'Betald',
+  'Swish QR code': 'QR-kod för Swish',
+  'Swish has not confirmed the payment. No receipt was created.':
+    'Swish har inte bekräftat betalningen. Inget kvitto skapades.',
+  'Swish has paid {amount} that is not on a receipt yet. Charge Swish for the same amount to use it.':
+    'Swish har betalat {amount} som inte finns på något kvitto än. Ta betalt med Swish för samma belopp för att använda det.',
+  'Swish refused the payment request. Try again or use another method.':
+    'Swish nekade betalningsförfrågan. Försök igen eller använd ett annat betalsätt.',
+  'Swish simulator: no real money. Pretend to be the guest:':
+    'Swish-simulator: inga riktiga pengar. Låtsas vara gästen:',
+  'Swish stopped the payment ({code}).': 'Swish stoppade betalningen ({code}).',
+  'The Swish payment is for a different amount than the bill.':
+    'Swish-betalningen gäller ett annat belopp än notan.',
+  'The guest cancelled BankID.': 'Gästen avbröt BankID.',
+  'The guest declined the payment in Swish.': 'Gästen nekade betalningen i Swish.',
+  'The guest did not pay in time.': 'Gästen betalade inte i tid.',
+  'The payment was cancelled.': 'Betalningen avbröts.',
+  'This Swish payment is already on a receipt.':
+    'Den här Swish-betalningen finns redan på ett kvitto.',
+  'This restaurant has no Swish number yet. Add it in the back office.':
+    'Restaurangen har inget Swish-nummer än. Lägg till det i backoffice.',
+  '{n} of {count}': '{n} av {count}',
 };

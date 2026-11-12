@@ -28,6 +28,14 @@ const payments = {
   },
 } as const;
 
+const salePayments = {
+  ...payments,
+  items: {
+    ...payments.items,
+    properties: { ...payments.items.properties, swishPaymentId: uuid },
+  },
+} as const;
+
 const createReceiptSchema = {
   params: registerParams,
   body: {
@@ -52,7 +60,7 @@ const createReceiptSchema = {
           },
         },
       },
-      payments,
+      payments: salePayments,
       orderDiscountOre: { ...integer, minimum: 0 },
       openOrderId: uuid,
     },

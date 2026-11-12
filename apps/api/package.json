@@ -15,10 +15,12 @@
     "@pos/control-system": "workspace:*",
     "@pos/domain": "workspace:*",
     "fastify": "catalog:",
-    "postgres": "catalog:"
+    "postgres": "catalog:",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "@types/qrcode": "^1.5.6",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

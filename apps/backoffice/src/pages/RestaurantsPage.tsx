@@ -37,6 +37,7 @@ import { useT } from '../i18n';
 import { notifyOk } from '../notify';
 import { PageHeader } from '../PageHeader';
 import { useAction, useLoad } from '../useLoad';
+import { SwishSection } from './SwishSection';
 import { TablesSection } from './TablesSection';
 import { TableSkeleton } from './TableSkeleton';
 
@@ -285,6 +286,7 @@ export function RestaurantsPage({ tenantId }: { tenantId: string }) {
               onAdded={reload}
             />
             <TablesSection tenantId={tenantId} restaurant={r} onChanged={reload} />
+            <SwishSection tenantId={tenantId} restaurant={r} onChanged={reload} />
           </Card>
         ))}
       </Stack>

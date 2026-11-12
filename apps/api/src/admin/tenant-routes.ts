@@ -60,8 +60,9 @@ export function tenantAdminRoutes(app: FastifyInstance, deps: AppDeps) {
     { preHandler, schema: { params: params() } },
     async (req) =>
       inTenant(deps, req.adminTenant!, async (tx) => {
-        const restaurants = await tx<{ id: string; name: string; address: string | null }[]>`
-        SELECT id, name, address FROM restaurants ORDER BY name`;
+        const restaurants = await tx<
+          { id: string; name: string; address: string | null; swish_number: string | null }[]
+        >`SELECT id, name, address, swish_number FROM restaurants ORDER BY name`;
         const tables = await tx<
           { id: string; restaurant_id: string; name: string; active: boolean; sort_order: number }[]
         >`SELECT id, restaurant_id, name, active, sort_order FROM dining_tables
@@ -94,8 +95,9 @@ export function tenantAdminRoutes(app: FastifyInstance, deps: AppDeps) {
           company: tenant
             ? { legalName: tenant.legal_name, orgNumber: tenant.org_number, status: tenant.status }
             : null,
-          restaurants: restaurants.map((r) => ({
+          restaurants: restaurants.map(({ swish_number, ...r }) => ({
             ...r,
+            swishNumber: swish_number,
             tables: tables
               .filter((tb) => tb.restaurant_id === r.id)
               .map((tb) => ({ id: tb.id, name: tb.name, active: tb.active })),
@@ -142,6 +144,44 @@ export function tenantAdminRoutes(app: FastifyInstance, deps: AppDeps) {
         return row!;
       });
       return reply.status(201).send(created);
+    },
+  );
+
+  // Name, address and the Swish number (Swish Handel) the restaurant takes payments to.
+  app.patch<{
+    Params: P<'restaurantId'>;
+    Body: { name?: string; address?: string | null; swishNumber?: string | null };
+  }>(
+    `${base}/restaurants/:restaurantId`,
+    {
+      preHandler,
+      schema: {
+        params: params('restaurantId'),
+        body: body({
+          name,
+          address: { anyOf: [{ type: 'string', maxLength: 200 }, { type: 'null' }] },
+          swishNumber: {
+            anyOf: [{ type: 'string', pattern: '^123[0-9]{7}$' }, { type: 'null' }],
+          },
+        }),
+      },
+    },
+    async (req, reply) => {
+      const ctx = req.adminTenant!;
+      const b = req.body;
+      await inTenant(deps, ctx, async (tx) => {
+        const [row] = await tx`
+          UPDATE restaurants
+          SET name = coalesce(${b.name?.trim() ?? null}, name),
+              address = CASE WHEN ${'address' in b} THEN ${b.address?.trim() || null}
+                             ELSE address END,
+              swish_number = CASE WHEN ${'swishNumber' in b} THEN ${b.swishNumber ?? null}
+                                  ELSE swish_number END
+          WHERE id = ${req.params.restaurantId} RETURNING id`;
+        if (!row) throw new HttpError(404, 'restaurant_not_found', 'Restaurant not found');
+        await audit(tx, ctx, 'restaurant.update', req.params.restaurantId, b);
+      });
+      return reply.status(204).send();
     },
   );
 

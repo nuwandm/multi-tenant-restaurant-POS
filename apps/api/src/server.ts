@@ -1,6 +1,7 @@
 import { FakeControlSystem } from '@pos/control-system';
 import { buildApp } from './app';
 import { createSql } from './db/client';
+import { swishFromEnv } from './payments/swish';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -10,7 +11,7 @@ if (!databaseUrl) {
 
 // The fake control system is replaced by the real provider adapter in Phase 4.
 const app = buildApp(
-  { sql: createSql(databaseUrl), controlSystem: new FakeControlSystem() },
+  { sql: createSql(databaseUrl), controlSystem: new FakeControlSystem(), swish: swishFromEnv() },
   { logger: true },
 );
 

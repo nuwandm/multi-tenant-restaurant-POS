@@ -30,6 +30,8 @@ export interface Restaurant {
   id: string;
   name: string;
   address: string | null;
+  /** Swish Handel number, 123xxxxxxx; null if the restaurant takes no Swish by QR code. */
+  swishNumber: string | null;
   registers: Register[];
   tables: { id: string; name: string; active: boolean }[];
 }
@@ -327,6 +329,12 @@ export const api = {
   ) => patch(`${t(tenantId)}/options/${optionId}`, body),
   setArticleOptionGroups: (tenantId: string, articleId: string, groupIds: string[]) =>
     request('PUT', `${t(tenantId)}/articles/${articleId}/option-groups`, { groupIds }),
+
+  updateRestaurant: (
+    tenantId: string,
+    restaurantId: string,
+    body: { name?: string; address?: string | null; swishNumber?: string | null },
+  ) => patch(`${t(tenantId)}/restaurants/${restaurantId}`, body),
 
   addTable: (tenantId: string, restaurantId: string, name: string) =>
     post(`${t(tenantId)}/restaurants/${restaurantId}/tables`, { name }),

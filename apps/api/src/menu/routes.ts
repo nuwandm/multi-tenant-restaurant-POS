@@ -14,6 +14,7 @@ interface RegisterRow {
   status: 'active' | 'retired';
   restaurant_id: string;
   restaurant_name: string;
+  swish: boolean;
   legal_name: string;
   org_number: string;
 }
@@ -53,6 +54,7 @@ export function menuRoutes(app: FastifyInstance, deps: AppDeps) {
       return withTenant(deps.sql, req.staff!.tenantId, async (tx) => {
         const [register] = await tx<RegisterRow[]>`
           SELECT r.designation, r.status, r.restaurant_id, s.name AS restaurant_name,
+                 s.swish_number IS NOT NULL AS swish,
                  t.legal_name, t.org_number
           FROM cash_registers r
           JOIN restaurants s ON s.id = r.restaurant_id
@@ -121,7 +123,8 @@ export function menuRoutes(app: FastifyInstance, deps: AppDeps) {
 
         return {
           register: { id: registerId, designation: register.designation, status: register.status },
-          restaurant: { name: register.restaurant_name },
+          // With Swish set up, Swish payments go through a QR code and Swish's confirmation.
+          restaurant: { name: register.restaurant_name, swish: register.swish },
           seller: { legalName: register.legal_name, orgNumber: register.org_number },
           groups: [...groups].map(([name, items]) => ({ name: name || null, articles: items })),
           tables,

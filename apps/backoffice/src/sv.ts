@@ -344,4 +344,15 @@ export const sv: Record<string, string> = {
   Bar: 'Bar',
   'No ticket': 'Ingen bong',
   Cash: 'Kontant',
+  'A Swish Handel number is 10 digits and starts with 123.':
+    'Ett Swish Handel-nummer har 10 siffror och börjar med 123.',
+  'Add Swish number': 'Lägg till Swish-nummer',
+  'Add the Swish Handel number from your bank so the till can take Swish by QR code.':
+    'Lägg till Swish Handel-numret från din bank så att kassan kan ta Swish med QR-kod.',
+  Change: 'Ändra',
+  'Changed a restaurant': 'Ändrade en restaurang',
+  'Not set up': 'Inte inställt',
+  Remove: 'Ta bort',
+  'The till shows guests a QR code and makes the receipt once Swish confirms payment.':
+    'Kassan visar gästen en QR-kod och skapar kvittot när Swish har bekräftat betalningen.',
 };

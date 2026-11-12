@@ -33,7 +33,8 @@ export interface DiningTable {
 
 export interface Menu {
   register: { id: string; designation: string; status: 'active' | 'retired' };
-  restaurant: { name: string };
+  /** swish: Swish payments go through a QR code and wait for Swish to confirm. */
+  restaurant: { name: string; swish: boolean };
   seller: { legalName: string; orgNumber: string };
   /** name is null for items without a group. */
   groups: { name: string | null; articles: Article[] }[];
@@ -122,8 +123,18 @@ export interface NewReceipt {
   kind: 'sale' | 'training';
   lines: LineRequest[];
   orderDiscountOre?: number;
-  payments: { method: PaymentMethod; amountOre: number }[];
+  payments: { method: PaymentMethod; amountOre: number; swishPaymentId?: string }[];
   openOrderId?: string;
+}
+
+export interface SwishPayment {
+  id: string;
+  status: 'pending' | 'paid' | 'declined' | 'cancelled' | 'error';
+  amountOre: number;
+  errorCode: string | null;
+  used: boolean;
+  /** The built-in simulator: the till may pretend to be the guest's phone. */
+  simulated: boolean;
 }
 
 export class ApiError extends Error {
@@ -143,6 +154,12 @@ const ERROR_TEXT: Record<string, string> = {
   forbidden: 'Only a manager or owner can do this.',
   wrong_register: 'You are logged in on another register.',
   control_system_unavailable: 'The control system is not responding. No receipt was created.',
+  swish_not_set_up: 'This restaurant has no Swish number yet. Add it in the back office.',
+  swish_not_paid: 'Swish has not confirmed the payment. No receipt was created.',
+  swish_already_used: 'This Swish payment is already on a receipt.',
+  swish_amount_mismatch: 'The Swish payment is for a different amount than the bill.',
+  swish_failed: 'Swish refused the payment request. Try again or use another method.',
+  swish_unavailable: 'Could not reach Swish. Try again or use another method.',
   register_retired: 'This register is retired.',
   article_unavailable: 'An item is no longer on the menu. Clear the order and try again.',
   option_unavailable: 'An option is no longer available. Remove the item and add it again.',
@@ -380,3 +397,17 @@ export const listKitchenTickets = (station?: Station) =>
 
 export const setTicketDone = (ticketId: string, done: boolean) =>
   post<{ id: string; done: boolean }>(`kitchen-tickets/${ticketId}`, { done });
+
+const swish = (path = '') => `swish-payments${path}`;
+
+/** Asks Swish for a payment request; returns it with the QR code for the guest to scan. */
+export const startSwishPayment = (amountOre: number) =>
+  post<SwishPayment & { qrSvg: string }>(swish(), { amountOre });
+
+export const getSwishPayment = (id: string) =>
+  request<SwishPayment>(`/registers/${registerId}/${swish(`/${id}`)}`);
+
+export const cancelSwishPayment = (id: string) => post<SwishPayment>(swish(`/${id}/cancel`));
+
+export const simulateSwishPayment = (id: string, outcome: 'paid' | 'declined') =>
+  post<SwishPayment>(swish(`/${id}/simulate`), { outcome });
