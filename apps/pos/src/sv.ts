@@ -1,5 +1,20 @@
 /** Swedish UI text, keyed by the English text in the code. See i18n.tsx. */
 export const sv: Record<string, string> = {
+  '1 item': '1 vara',
+  'Add groups and items under Menu in the back office. They appear here at once.':
+    'Lägg till grupper och varor under Meny i back office. De syns här direkt.',
+  'Charge {amount}': 'Ta betalt {amount}',
+  'Check the spelling or clear the search.': 'Kontrollera stavningen eller rensa sökningen.',
+  'Current order': 'Pågående order',
+  Empty: 'Tom',
+  'No items match “{query}”': 'Inga varor matchar ”{query}”',
+  'No items yet': 'Inga varor än',
+  'Search items': 'Sök varor',
+  'Subtotal excl. VAT': 'Delsumma exkl. moms',
+  'Tap items on the left to start an order.':
+    'Tryck på varor till vänster för att starta en order.',
+  'VAT {rate}%': 'Moms {rate}%',
+  '{count} items': '{count} varor',
   'Something went wrong': 'Något gick fel',
   'The page hit an unexpected error. Reloading usually fixes it.':
     'Sidan fick ett oväntat fel. Att ladda om brukar lösa det.',

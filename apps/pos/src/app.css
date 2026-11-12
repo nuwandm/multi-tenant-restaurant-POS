@@ -94,6 +94,242 @@ textarea {
   font-variant-numeric: tabular-nums;
 }
 
+/* ---------- Selling screen ---------- */
+
+.till-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(340px, 31vw, 430px);
+}
+
+/* Training: unmistakable but calm. Diagonal stripes read as "not the real thing". */
+.training-bar {
+  height: 30px;
+  color: var(--mantine-color-orange-9);
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--mantine-color-orange-1),
+    var(--mantine-color-orange-1) 12px,
+    var(--mantine-color-orange-0) 12px,
+    var(--mantine-color-orange-0) 24px
+  );
+  border-bottom: 1px solid var(--mantine-color-orange-2);
+}
+
+[data-mantine-color-scheme='dark'] .training-bar {
+  color: var(--mantine-color-orange-3);
+  background: repeating-linear-gradient(
+    -45deg,
+    rgb(253 126 20 / 0.14),
+    rgb(253 126 20 / 0.14) 12px,
+    rgb(253 126 20 / 0.08) 12px,
+    rgb(253 126 20 / 0.08) 24px
+  );
+  border-bottom-color: rgb(253 126 20 / 0.25);
+}
+
+.user-chip {
+  padding: 4px 8px 4px 4px;
+  border-radius: 999px;
+  transition: background 120ms ease;
+}
+
+.user-chip:hover {
+  background: var(--mantine-color-default-hover);
+}
+
+/* Live status dot; pulses gently while connected. */
+.status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status-dot[data-state='online'] {
+  box-shadow: 0 0 0 0 currentColor;
+  animation: status-pulse 2.4s ease-out infinite;
+}
+
+@keyframes status-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+/* Category chips: the group's accent shows in the dot and, when active, the fill. */
+.category-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 14px 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--app-line);
+  background: var(--app-surface);
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 550;
+  white-space: nowrap;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.category-chip:hover {
+  border-color: var(--app-line-strong);
+}
+
+.category-chip[data-active='true'] {
+  background: var(--mantine-color-text);
+  border-color: var(--mantine-color-text);
+  color: var(--app-surface);
+}
+
+.category-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.category-count {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  background: var(--mantine-color-default-hover);
+  color: var(--mantine-color-dimmed);
+}
+
+.category-chip[data-active='true'] .category-count {
+  background: color-mix(in srgb, var(--app-surface) 18%, transparent);
+  color: inherit;
+}
+
+/* Item cards: a short accent tab in the group colour. */
+.item-card::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 16px;
+  width: 26px;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: var(--accent);
+}
+
+.item-qty {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--mantine-color-brand-filled);
+  color: white;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 26px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 2px 6px -1px color-mix(in srgb, var(--mantine-color-brand-filled) 50%, transparent);
+  animation: qty-pop 180ms ease-out;
+}
+
+@keyframes qty-pop {
+  from {
+    transform: scale(0.6);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.item-add {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--mantine-color-default-hover);
+  color: var(--mantine-color-dimmed);
+  transition:
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.item-card:hover .item-add {
+  background: var(--mantine-color-brand-filled);
+  color: white;
+}
+
+.empty-icon {
+  border: 1px dashed var(--app-line-strong);
+}
+
+/* Order panel */
+.order-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.order-line {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--app-line);
+  animation: line-in 160ms ease-out;
+}
+
+@keyframes line-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.qty-pill {
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  background: var(--app-surface-muted);
+}
+
+.checkout {
+  border-top: 1px solid var(--app-line);
+  background: var(--app-surface-muted);
+}
+
+.charge-button {
+  font-size: 1.0625rem;
+  letter-spacing: -0.01em;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.12) inset,
+    0 6px 16px -6px color-mix(in srgb, var(--mantine-color-brand-filled) 70%, transparent);
+}
+
+.charge-button:disabled,
+.charge-button[data-disabled] {
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-dot[data-state='online'],
+  .item-qty,
+  .order-line {
+    animation: none;
+  }
+}
+
 /* Staff tiles on the login screen. */
 .staff-tile {
   display: flex;

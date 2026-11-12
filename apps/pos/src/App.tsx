@@ -14,8 +14,9 @@ import {
   ScrollArea,
   SimpleGrid,
   Stack,
-  Switch,
   Text,
+  TextInput,
+  ThemeIcon,
   Title,
   Tooltip,
   UnstyledButton,
@@ -33,12 +34,13 @@ import {
   IconPlus,
   IconReceipt,
   IconSchool,
-  IconShoppingBagX,
+  IconSearch,
+  IconShoppingBag,
   IconToolsKitchen2,
-  IconTrash,
+  IconX,
 } from '@tabler/icons-react';
 import { buildReceipt, ore, type PaymentMethod } from '@pos/domain';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   createReceipt,
   getHealth,
@@ -66,6 +68,11 @@ interface BasketLine {
   quantity: number;
 }
 
+/** Each menu group gets its own accent, so staff find items by colour as well as name. */
+const GROUP_ACCENTS = ['brand', 'indigo', 'orange', 'grape', 'cyan', 'pink', 'teal', 'violet'];
+const accentOf = (groupIndex: number) =>
+  `var(--mantine-color-${GROUP_ACCENTS[groupIndex % GROUP_ACCENTS.length]}-5)`;
+
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 interface Props {
@@ -84,6 +91,7 @@ export function App({ staff, device, onLogout }: Props) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [online, setOnline] = useState<boolean | null>(null);
   const [groupIndex, setGroupIndex] = useState(0);
+  const [search, setSearch] = useState('');
   const [basket, setBasket] = useState<BasketLine[]>([]);
   const [training, setTraining] = useState(trainingOnly);
   const [cashOpen, setCashOpen] = useState(false);
@@ -199,66 +207,81 @@ export function App({ staff, device, onLogout }: Props) {
     );
   }
 
-  const group = menu.groups[groupIndex];
+  const query = search.trim().toLowerCase();
+  const visible = query
+    ? menu.groups.flatMap((g, gi) =>
+        g.articles.filter((a) => a.name.toLowerCase().includes(query)).map((a) => ({ a, gi })),
+      )
+    : (menu.groups[groupIndex]?.articles ?? []).map((a) => ({ a, gi: groupIndex }));
   const total = preview?.totalOre ?? 0;
+  const vatTotal = preview?.vatTotals.reduce((s, v) => s + v.vatOre, 0) ?? 0;
   const itemCount = basket.reduce((n, l) => n + l.quantity, 0);
   const canPay = basket.length > 0 && busy === null && online !== false;
   const inOrder = new Map(basket.map((l) => [l.article.id, l.quantity]));
+  const menuEmpty = menu.groups.every((g) => g.articles.length === 0);
 
   return (
-    <AppShell header={{ height: 64 }} padding={0}>
-      <AppShell.Header px="md" className="till-header">
-        <Group h="100%" justify="space-between" wrap="nowrap">
-          <Group gap="md" wrap="nowrap">
+    <AppShell header={{ height: 68 }} padding={0}>
+      <AppShell.Header px="lg" className="till-header">
+        <Group h="100%" justify="space-between" wrap="nowrap" gap="md">
+          <Group gap="md" wrap="nowrap" style={{ minWidth: 0 }}>
             <Brand compact />
-            <div>
-              <Text fw={650} lh={1.2}>
+            <Box style={{ minWidth: 0 }}>
+              <Text fw={600} lh={1.25} truncate>
                 {menu.restaurant.name}
               </Text>
-              <Text fz="xs" c="dimmed">
-                {t('Register {name}', { name: menu.register.designation })}
-              </Text>
-            </div>
-            <StatusPill online={online} />
+              <Group gap={6} wrap="nowrap">
+                <Text fz="xs" c="dimmed" className="mono">
+                  {menu.register.designation}
+                </Text>
+                <StatusDot online={online} />
+              </Group>
+            </Box>
           </Group>
 
-          <Group gap="xs" wrap="nowrap">
-            <Button
-              variant="default"
-              leftSection={<IconReceipt size={18} stroke={1.6} />}
-              onClick={() => setReceiptsOpen(true)}
-            >
-              {t('Receipts')}
-            </Button>
-            <DropdownMenu position="bottom-end" width={220} shadow="md">
-              <DropdownMenu.Target>
-                <Button
-                  variant="default"
-                  leftSection={<IconFileAnalytics size={18} stroke={1.6} />}
-                  rightSection={<IconChevronDown size={14} />}
-                >
-                  {t('Reports')}
-                </Button>
-              </DropdownMenu.Target>
-              <DropdownMenu.Dropdown>
-                <DropdownMenu.Item onClick={() => setReport('x')}>
-                  {t('X report')}
-                  <Text fz="xs" c="dimmed">
-                    {t('Sales so far today')}
-                  </Text>
-                </DropdownMenu.Item>
-                <DropdownMenu.Item
-                  disabled={!manager}
-                  rightSection={!manager && <IconLock size={14} />}
-                  onClick={() => setReport('z')}
-                >
-                  {t('Z report')}
-                  <Text fz="xs" c="dimmed">
-                    {manager ? t('Close the day') : t('Managers and owners only')}
-                  </Text>
-                </DropdownMenu.Item>
-              </DropdownMenu.Dropdown>
-            </DropdownMenu>
+          <Group gap={10} wrap="nowrap">
+            <Button.Group>
+              <Button
+                variant="default"
+                leftSection={<IconReceipt size={17} stroke={1.7} />}
+                onClick={() => setReceiptsOpen(true)}
+              >
+                {t('Receipts')}
+              </Button>
+              <DropdownMenu position="bottom-end" width={240}>
+                <DropdownMenu.Target>
+                  <Button
+                    variant="default"
+                    leftSection={<IconFileAnalytics size={17} stroke={1.7} />}
+                    rightSection={<IconChevronDown size={14} />}
+                  >
+                    {t('Reports')}
+                  </Button>
+                </DropdownMenu.Target>
+                <DropdownMenu.Dropdown>
+                  <DropdownMenu.Item onClick={() => setReport('x')}>
+                    <Text fz="sm" fw={500}>
+                      {t('X report')}
+                    </Text>
+                    <Text fz="xs" c="dimmed">
+                      {t('Sales so far today')}
+                    </Text>
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    disabled={!manager}
+                    rightSection={!manager && <IconLock size={14} />}
+                    onClick={() => setReport('z')}
+                  >
+                    <Text fz="sm" fw={500}>
+                      {t('Z report')}
+                    </Text>
+                    <Text fz="xs" c="dimmed">
+                      {manager ? t('Close the day') : t('Managers and owners only')}
+                    </Text>
+                  </DropdownMenu.Item>
+                </DropdownMenu.Dropdown>
+              </DropdownMenu>
+            </Button.Group>
 
             <Tooltip
               label={
@@ -267,28 +290,27 @@ export function App({ staff, device, onLogout }: Props) {
                   : t('Practice without real sales')
               }
             >
-              <div>
-                <Switch
-                  color="orange"
-                  size="md"
-                  label={t('Training')}
-                  thumbIcon={<IconSchool size={12} />}
-                  checked={training}
-                  disabled={basket.length > 0 || trainingOnly}
-                  onChange={(e) => setTraining(e.currentTarget.checked)}
-                  visibleFrom="md"
-                />
-              </div>
+              <Button
+                variant={training ? 'light' : 'subtle'}
+                color={training ? 'orange' : 'gray'}
+                leftSection={<IconSchool size={17} stroke={1.7} />}
+                disabled={basket.length > 0 || trainingOnly}
+                onClick={() => setTraining((v) => !v)}
+                className={training ? 'training-toggle-on' : undefined}
+                visibleFrom="md"
+              >
+                {t('Training')}
+              </Button>
             </Tooltip>
 
-            <Divider orientation="vertical" mx={4} />
+            <Divider orientation="vertical" my={18} />
             <LanguageToggle />
             <ColorSchemeToggle />
 
-            <DropdownMenu position="bottom-end" width={220} shadow="md">
+            <DropdownMenu position="bottom-end" width={220}>
               <DropdownMenu.Target>
-                <UnstyledButton aria-label={staff.displayName}>
-                  <Group gap={8} wrap="nowrap">
+                <UnstyledButton aria-label={staff.displayName} className="user-chip">
+                  <Group gap={10} wrap="nowrap">
                     <Avatar
                       radius="xl"
                       size={36}
@@ -301,10 +323,11 @@ export function App({ staff, device, onLogout }: Props) {
                       <Text fz="sm" fw={600} lh={1.2}>
                         {staff.displayName}
                       </Text>
-                      <Text fz="xs" c="dimmed">
+                      <Text fz="xs" c="dimmed" lh={1.2}>
                         {t(ROLE_LABELS[staff.role])}
                       </Text>
                     </Box>
+                    <IconChevronDown size={14} color="var(--mantine-color-dimmed)" />
                   </Group>
                 </UnstyledButton>
               </DropdownMenu.Target>
@@ -325,83 +348,100 @@ export function App({ staff, device, onLogout }: Props) {
 
       <AppShell.Main>
         {training && (
-          <Group
-            justify="center"
-            gap={8}
-            py={6}
-            bg="orange.6"
-            c="white"
-            fz="sm"
-            fw={600}
-            style={{ letterSpacing: '0.04em' }}
-          >
-            <IconSchool size={16} />
-            {t('TRAINING MODE – sales are not real')}
+          <Group className="training-bar" justify="center" gap={8}>
+            <IconSchool size={15} stroke={1.8} />
+            <Text fz="xs" fw={650} lts={0.4}>
+              {t('TRAINING MODE – sales are not real')}
+            </Text>
           </Group>
         )}
 
         <Box
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1fr) clamp(320px, 32vw, 420px)',
-            height: `calc(100dvh - 64px${training ? ' - 33px' : ''})`,
-          }}
+          className="till-layout"
+          style={{ height: `calc(100dvh - 68px${training ? ' - 30px' : ''})` }}
         >
           {/* Menu */}
           <Stack gap={0} style={{ minHeight: 0 }}>
-            <ScrollArea type="never" px="md" pt="md" pb="xs" style={{ flex: 'none' }}>
-              <Group gap="xs" wrap="nowrap">
-                {menu.groups.map((g, i) => (
-                  <Button
-                    key={g.name ?? ''}
-                    radius="xl"
-                    variant={i === groupIndex ? 'filled' : 'default'}
-                    onClick={() => setGroupIndex(i)}
-                    style={{ flex: 'none' }}
-                  >
-                    {g.name ?? t('Other')}
-                    <Badge
-                      ml={8}
+            <Group gap="sm" px="lg" pt="lg" pb="sm" wrap="nowrap">
+              <TextInput
+                radius="xl"
+                placeholder={t('Search items')}
+                leftSection={<IconSearch size={16} />}
+                rightSection={
+                  search && (
+                    <ActionIcon
+                      variant="subtle"
+                      color="gray"
+                      radius="xl"
                       size="sm"
-                      circle
-                      variant={i === groupIndex ? 'white' : 'light'}
-                      color={i === groupIndex ? 'dark' : 'gray'}
+                      onClick={() => setSearch('')}
+                      aria-label={t('Clear')}
                     >
-                      {g.articles.length}
-                    </Badge>
-                  </Button>
-                ))}
-              </Group>
-            </ScrollArea>
+                      <IconX size={14} />
+                    </ActionIcon>
+                  )
+                }
+                value={search}
+                onChange={(e) => setSearch(e.currentTarget.value)}
+                w={260}
+                style={{ flex: 'none' }}
+              />
+              {!query && (
+                <ScrollArea type="never" style={{ flex: 1 }}>
+                  <Group gap={8} wrap="nowrap">
+                    {menu.groups.map((g, i) => (
+                      <UnstyledButton
+                        key={g.name ?? ''}
+                        className="category-chip"
+                        data-active={i === groupIndex}
+                        style={{ '--accent': accentOf(i) } as CSSProperties}
+                        onClick={() => setGroupIndex(i)}
+                      >
+                        <span className="category-dot" />
+                        {g.name ?? t('Other')}
+                        <span className="category-count">{g.articles.length}</span>
+                      </UnstyledButton>
+                    ))}
+                  </Group>
+                </ScrollArea>
+              )}
+            </Group>
 
-            <ScrollArea style={{ flex: 1 }} px="md" pb="md">
-              {menu.groups.length === 0 ? (
-                <Center h={300}>
-                  <Stack align="center" gap={6}>
-                    <IconToolsKitchen2 size={36} stroke={1.3} color="var(--mantine-color-gray-5)" />
-                    <Text c="dimmed">{t('The menu is empty.')}</Text>
-                  </Stack>
-                </Center>
+            <ScrollArea style={{ flex: 1 }} px="lg" pb="lg">
+              {menuEmpty ? (
+                <EmptyState
+                  icon={<IconToolsKitchen2 size={28} stroke={1.5} />}
+                  title={t('No items yet')}
+                  text={t(
+                    'Add groups and items under Menu in the back office. They appear here at once.',
+                  )}
+                />
+              ) : visible.length === 0 ? (
+                <EmptyState
+                  icon={<IconSearch size={26} stroke={1.5} />}
+                  title={t('No items match “{query}”', { query: search.trim() })}
+                  text={t('Check the spelling or clear the search.')}
+                />
               ) : (
-                <SimpleGrid cols={{ base: 2, sm: 3, lg: 4, xl: 5 }} spacing="sm" pt={4}>
-                  {group?.articles.map((a) => (
+                <SimpleGrid cols={{ base: 2, sm: 3, lg: 4, xl: 5 }} spacing="md" pt={6}>
+                  {visible.map(({ a, gi }) => (
                     <UnstyledButton
                       key={a.id}
                       className="item-card"
                       data-in-order={inOrder.has(a.id)}
+                      style={{ '--accent': accentOf(gi) } as CSSProperties}
                       onClick={() => add(a)}
                     >
-                      <Group justify="space-between" align="flex-start" wrap="nowrap" gap={6}>
-                        <Text fw={600} lh={1.3} lineClamp={2}>
-                          {a.name}
-                        </Text>
-                        {inOrder.has(a.id) && (
-                          <Badge size="lg" circle variant="filled">
-                            {inOrder.get(a.id)}
-                          </Badge>
-                        )}
+                      {inOrder.has(a.id) && <span className="item-qty">{inOrder.get(a.id)}</span>}
+                      <Text fw={600} lh={1.3} lineClamp={2} pr={inOrder.has(a.id) ? 28 : 0}>
+                        {a.name}
+                      </Text>
+                      <Group justify="space-between" align="center" wrap="nowrap">
+                        <span className="item-price">{formatKr(a.priceOre)}</span>
+                        <span className="item-add" aria-hidden="true">
+                          <IconPlus size={14} stroke={2.2} />
+                        </span>
                       </Group>
-                      <Text className="item-price">{formatKr(a.priceOre)}</Text>
                     </UnstyledButton>
                   ))}
                 </SimpleGrid>
@@ -410,102 +450,119 @@ export function App({ staff, device, onLogout }: Props) {
           </Stack>
 
           {/* Order */}
-          <Box
-            className="order-panel"
-            style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}
-          >
-            <Group justify="space-between" px="lg" pt="lg" pb="sm">
-              <Group gap={8}>
-                <Title order={4}>{t('Order')}</Title>
-                {itemCount > 0 && (
-                  <Badge variant="light" radius="sm">
-                    {itemCount}
-                  </Badge>
-                )}
-              </Group>
+          <Box className="order-panel">
+            <Group justify="space-between" px="lg" pt="lg" pb="md" wrap="nowrap">
+              <div>
+                <Title order={4} fw={600}>
+                  {t('Current order')}
+                </Title>
+                <Text fz="xs" c="dimmed">
+                  {itemCount === 0
+                    ? t('Empty')
+                    : itemCount === 1
+                      ? t('1 item')
+                      : t('{count} items', { count: itemCount })}
+                </Text>
+              </div>
               {basket.length > 0 && (
-                <Tooltip label={t('Clear order')}>
-                  <ActionIcon
-                    variant="subtle"
-                    color="red"
-                    onClick={() => setBasket([])}
-                    disabled={busy !== null}
-                    aria-label={t('Clear order')}
-                  >
-                    <IconTrash size={18} stroke={1.6} />
-                  </ActionIcon>
-                </Tooltip>
+                <Button
+                  variant="subtle"
+                  color="red"
+                  size="compact-sm"
+                  onClick={() => setBasket([])}
+                  disabled={busy !== null}
+                >
+                  {t('Clear')}
+                </Button>
               )}
             </Group>
 
             <ScrollArea style={{ flex: 1 }} px="lg">
               {basket.length === 0 ? (
-                <Stack align="center" justify="center" gap={6} h={220} c="dimmed">
-                  <IconShoppingBagX size={36} stroke={1.3} />
-                  <Text fz="sm">{t('Tap an item to add it.')}</Text>
+                <Stack align="center" justify="center" gap={10} h={260} ta="center">
+                  <ThemeIcon size={56} radius="xl" color="gray" variant="light">
+                    <IconShoppingBag size={26} stroke={1.5} />
+                  </ThemeIcon>
+                  <Text fw={600}>{t('No items yet')}</Text>
+                  <Text fz="sm" c="dimmed" maw={220}>
+                    {t('Tap items on the left to start an order.')}
+                  </Text>
                 </Stack>
               ) : (
                 <Stack gap={0}>
                   {basket.map((l) => (
                     <Group
                       key={l.article.id}
+                      className="order-line"
                       justify="space-between"
                       wrap="nowrap"
-                      py="sm"
-                      style={{ borderBottom: '1px solid var(--till-line)' }}
+                      gap="sm"
                     >
-                      <Box style={{ minWidth: 0 }}>
+                      <Box style={{ minWidth: 0, flex: 1 }}>
                         <Text fw={550} truncate>
                           {l.article.name}
                         </Text>
-                        <Text fz="xs" c="dimmed" className="tabular">
+                        <Text fz="xs" c="dimmed" className="mono">
                           {formatKr(l.article.priceOre)}
                         </Text>
                       </Box>
-                      <Group gap={6} wrap="nowrap">
+                      <Group gap={0} className="qty-pill" wrap="nowrap">
                         <ActionIcon
-                          variant="default"
+                          variant="subtle"
+                          color="gray"
                           radius="xl"
-                          size="lg"
+                          size={34}
                           aria-label={t('Remove one {name}', { name: l.article.name })}
                           onClick={() => changeQuantity(l.article.id, -1)}
                         >
-                          <IconMinus size={16} />
+                          <IconMinus size={15} />
                         </ActionIcon>
-                        <Text w={24} ta="center" fw={600} className="tabular">
+                        <Text w={26} ta="center" fw={600} className="tabular">
                           {l.quantity}
                         </Text>
                         <ActionIcon
-                          variant="default"
+                          variant="subtle"
+                          color="gray"
                           radius="xl"
-                          size="lg"
+                          size={34}
                           aria-label={t('Add one {name}', { name: l.article.name })}
                           onClick={() => changeQuantity(l.article.id, 1)}
                         >
-                          <IconPlus size={16} />
+                          <IconPlus size={15} />
                         </ActionIcon>
-                        <Text w={84} ta="right" fw={600} className="tabular">
-                          {formatKr(l.quantity * l.article.priceOre)}
-                        </Text>
                       </Group>
+                      <Text w={88} ta="right" fw={600} className="mono" fz="sm">
+                        {formatKr(l.quantity * l.article.priceOre)}
+                      </Text>
                     </Group>
                   ))}
                 </Stack>
               )}
             </ScrollArea>
 
-            <Stack gap="sm" p="lg" style={{ borderTop: '1px solid var(--till-line)' }}>
-              {preview?.vatTotals.map((v) => (
-                <Group key={v.vatRate} justify="space-between">
+            <Stack gap={12} p="lg" className="checkout">
+              <Stack gap={4}>
+                <Group justify="space-between">
                   <Text fz="sm" c="dimmed">
-                    {t('incl. VAT {rate}%', { rate: v.vatRate })}
+                    {t('Subtotal excl. VAT')}
                   </Text>
-                  <Text fz="sm" c="dimmed" className="tabular">
-                    {formatKr(v.vatOre)}
+                  <Text fz="sm" c="dimmed" className="mono">
+                    {formatKr(total - vatTotal)}
                   </Text>
                 </Group>
-              ))}
-              <Group justify="space-between" align="baseline">
+                {preview?.vatTotals.map((v) => (
+                  <Group key={v.vatRate} justify="space-between">
+                    <Text fz="sm" c="dimmed">
+                      {t('VAT {rate}%', { rate: v.vatRate })}
+                    </Text>
+                    <Text fz="sm" c="dimmed" className="mono">
+                      {formatKr(v.vatOre)}
+                    </Text>
+                  </Group>
+                ))}
+              </Stack>
+              <Divider color="var(--app-line)" />
+              <Group justify="space-between" align="flex-end">
                 <Text fw={600}>{t('Total')}</Text>
                 <Text className="total-figure">{formatKr(total)}</Text>
               </Group>
@@ -521,28 +578,43 @@ export function App({ staff, device, onLogout }: Props) {
                 </Alert>
               )}
 
-              <SimpleGrid cols={3} spacing="xs">
-                <PayButton
-                  icon={<IconCreditCard size={26} stroke={1.6} />}
-                  label={t('Card')}
-                  loading={busy === 'card'}
-                  disabled={!canPay}
-                  onClick={() => pay('card', total)}
-                />
-                <PayButton
-                  icon={<IconDeviceMobile size={26} stroke={1.6} />}
-                  label={t('Swish')}
+              <Button
+                className="charge-button"
+                size="xl"
+                h={64}
+                fullWidth
+                loading={busy === 'card'}
+                disabled={!canPay}
+                leftSection={<IconCreditCard size={24} stroke={1.7} />}
+                onClick={() => pay('card', total)}
+              >
+                {basket.length === 0
+                  ? t('Card')
+                  : t('Charge {amount}', { amount: formatKr(total) })}
+              </Button>
+              <SimpleGrid cols={2} spacing={10}>
+                <Button
+                  variant="default"
+                  size="lg"
+                  h={54}
                   loading={busy === 'swish'}
                   disabled={!canPay}
+                  leftSection={<IconDeviceMobile size={20} stroke={1.7} />}
                   onClick={() => pay('swish', total)}
-                />
-                <PayButton
-                  icon={<IconCash size={26} stroke={1.6} />}
-                  label={t('Cash')}
+                >
+                  {t('Swish')}
+                </Button>
+                <Button
+                  variant="default"
+                  size="lg"
+                  h={54}
                   loading={busy === 'cash'}
                   disabled={!canPay}
+                  leftSection={<IconCash size={20} stroke={1.7} />}
                   onClick={() => setCashOpen(true)}
-                />
+                >
+                  {t('Cash')}
+                </Button>
               </SimpleGrid>
             </Stack>
           </Box>
@@ -580,31 +652,27 @@ export function App({ staff, device, onLogout }: Props) {
   );
 }
 
-function PayButton(props: {
-  icon: ReactNode;
-  label: string;
-  loading: boolean;
-  disabled: boolean;
-  onClick: () => void;
-}) {
+function EmptyState({ icon, title, text }: { icon: ReactNode; title: string; text: string }) {
   return (
-    <Button
-      h={76}
-      size="md"
-      loading={props.loading}
-      disabled={props.disabled}
-      onClick={props.onClick}
-      styles={{ label: { flexDirection: 'column', gap: 4 } }}
-    >
-      {props.icon}
-      {props.label}
-    </Button>
+    <Center h={360}>
+      <Stack align="center" gap={10} maw={340} ta="center">
+        <ThemeIcon size={64} radius="xl" color="gray" variant="light" className="empty-icon">
+          {icon}
+        </ThemeIcon>
+        <Text fw={600} fz="lg">
+          {title}
+        </Text>
+        <Text fz="sm" c="dimmed">
+          {text}
+        </Text>
+      </Stack>
+    </Center>
   );
 }
 
-function StatusPill({ online }: { online: boolean | null }) {
+function StatusDot({ online }: { online: boolean | null }) {
   const t = useT();
-  const color = online === null ? 'gray' : online ? 'brand' : 'red';
+  const state = online === null ? 'pending' : online ? 'online' : 'offline';
   const label =
     online === null
       ? t('Connecting…')
@@ -614,18 +682,10 @@ function StatusPill({ online }: { online: boolean | null }) {
   return (
     <Tooltip label={label}>
       <Badge
+        size="sm"
         variant="light"
-        color={color}
-        radius="sm"
-        visibleFrom="sm"
-        leftSection={
-          <Box
-            w={8}
-            h={8}
-            style={{ borderRadius: '50%', background: `var(--mantine-color-${color}-6)` }}
-          />
-        }
-        styles={{ section: { marginRight: 8 } }}
+        color={online === null ? 'gray' : online ? 'brand' : 'red'}
+        leftSection={<span className="status-dot" data-state={state} />}
       >
         {online === null ? t('Connecting…') : online ? t('Online') : t('Offline')}
       </Badge>
