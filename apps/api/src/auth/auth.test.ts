@@ -7,6 +7,7 @@ import {
   createSession,
   createStaff,
   createTenant,
+  pairDevice,
   type TenantFixture,
 } from '../../test/fixtures';
 import { buildApp } from '../app';
@@ -19,6 +20,18 @@ const app = buildApp({ sql, controlSystem: new FakeControlSystem() });
 let shop: TenantFixture;
 let cashierId: string;
 let coffee: string;
+const devices = new Map<string, string>();
+
+/** One paired till per test company, created on first use. */
+async function deviceFor(fixture: TenantFixture): Promise<string> {
+  if (!devices.has(fixture.tenantId)) {
+    devices.set(
+      fixture.tenantId,
+      await pairDevice(sql, fixture.tenantId, fixture.registerId, fixture.managerId),
+    );
+  }
+  return devices.get(fixture.tenantId)!;
+}
 
 beforeAll(async () => {
   shop = await createTenant(sql);
@@ -31,17 +44,12 @@ afterAll(async () => {
   await sql.end();
 });
 
-function login(
-  fixture: TenantFixture,
-  userId: string,
-  pin: string,
-  registerId = fixture.registerId,
-) {
+async function login(fixture: TenantFixture, userId: string, pin: string) {
   return app.inject({
     method: 'POST',
     url: '/auth/login',
-    headers: { 'x-tenant-id': fixture.tenantId },
-    payload: { registerId, userId, pin },
+    headers: { 'x-device-token': await deviceFor(fixture) },
+    payload: { userId, pin },
   });
 }
 
@@ -67,8 +75,8 @@ describe('login screen', () => {
     });
     const res = await app.inject({
       method: 'GET',
-      url: `/registers/${shop.registerId}/login-info`,
-      headers: { 'x-tenant-id': shop.tenantId },
+      url: '/device',
+      headers: { 'x-device-token': await deviceFor(shop) },
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -146,10 +154,91 @@ describe('POST /auth/login', () => {
     expect((await login(shop, userId, '1212')).statusCode).toBe(401);
   });
 
-  it("can't log in to another company's register or as their staff", async () => {
+  it("can't log in on another company's till", async () => {
     const other = await createTenant(sql);
-    expect((await login(shop, cashierId, '4321', other.registerId)).statusCode).toBe(404);
-    expect((await login(other, cashierId, '4321', other.registerId)).statusCode).toBe(401);
+    expect((await login(other, cashierId, '4321')).statusCode).toBe(401);
+  });
+});
+
+describe('device pairing', () => {
+  const pair = (code: string, name = 'Kassa-iPad') =>
+    app.inject({ method: 'POST', url: '/devices/pair', payload: { code, name } });
+
+  async function pairingCode(fixture: TenantFixture) {
+    const { newPairingCode, hashPairingCode } = await import('./device');
+    const code = newPairingCode();
+    await sql.begin(async (tx) => {
+      await tx`SET LOCAL ROLE pos_app`;
+      await tx`SELECT set_config('app.tenant_id', ${fixture.tenantId}, true)`;
+      await tx`
+        INSERT INTO pairing_codes (code_hash, tenant_id, register_id, created_by, expires_at)
+        VALUES (${hashPairingCode(code)}, ${fixture.tenantId}, ${fixture.registerId},
+                ${fixture.managerId}, ${new Date(Date.now() + 60_000)})`;
+    });
+    return code;
+  }
+
+  it('a code pairs one device, once, and is forgiving about case and dashes', async () => {
+    const code = await pairingCode(shop);
+    const typed = code.toLowerCase().replace('-', ' ');
+    const res = await pair(typed);
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ registerId: shop.registerId });
+
+    const device = await app.inject({
+      method: 'GET',
+      url: '/device',
+      headers: { 'x-device-token': res.json().deviceToken },
+    });
+    expect(device.json()).toMatchObject({ device: { name: 'Kassa-iPad' } });
+
+    expect((await pair(code)).json()).toMatchObject({ error: 'invalid_pairing_code' });
+  });
+
+  it('rejects a made-up code and an unpaired device', async () => {
+    expect((await pair('ABCD-EFGH')).statusCode).toBe(400);
+    const res = await app.inject({
+      method: 'GET',
+      url: '/device',
+      headers: { 'x-device-token': 'nope' },
+    });
+    expect(res.json()).toMatchObject({ error: 'device_not_paired' });
+  });
+});
+
+describe('retried payments', () => {
+  it('the same Idempotency-Key returns the first receipt and uses no new number', async () => {
+    const fixture = await createTenant(sql);
+    const tea = await createArticle(sql, fixture, { name: 'Te', priceOre: 2500, vatRate: 12 });
+    const send = (key: string) =>
+      app.inject({
+        method: 'POST',
+        url: `/registers/${fixture.registerId}/receipts`,
+        headers: { ...auth(fixture.token), 'idempotency-key': key },
+        payload: {
+          kind: 'sale',
+          lines: [{ articleId: tea, quantity: 1 }],
+          payments: [{ method: 'card', amountOre: 2500 }],
+        },
+      });
+
+    const first = await send('attempt-0001');
+    const retry = await send('attempt-0001');
+    const next = await send('attempt-0002');
+
+    expect(retry.json().id).toBe(first.json().id);
+    expect(retry.json().receiptNumber).toBe(1);
+    expect(next.json().receiptNumber).toBe(2);
+  });
+
+  it('rejects a malformed key', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/registers/${shop.registerId}/receipts`,
+      headers: { ...auth(shop.token), 'idempotency-key': 'x' },
+      payload: { kind: 'sale', lines: [{ articleId: coffee, quantity: 1 }], payments: [] },
+    });
+    expect(res.json()).toMatchObject({ error: 'invalid_idempotency_key' });
   });
 });
 

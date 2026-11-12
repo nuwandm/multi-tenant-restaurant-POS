@@ -5,9 +5,11 @@ import { testDatabaseUrl } from '../../test/db';
 import { auth, createPlatformAdmin, randomOrgNumber } from '../../test/fixtures';
 import { buildApp } from '../app';
 import { createSql } from '../db/client';
+import { MemoryMailer } from '../mail/mailer';
 
 const sql = createSql(testDatabaseUrl);
-const app = buildApp({ sql, controlSystem: new FakeControlSystem() });
+const mailer = new MemoryMailer();
+const app = buildApp({ sql, controlSystem: new FakeControlSystem(), mailer });
 
 const PASSWORD = 'correct horse battery';
 let adminToken: string;
@@ -73,20 +75,35 @@ async function setUpRestaurant(token: string, tenantId: string) {
     pin: '2580',
   });
   expect(cashier.statusCode).toBe(201);
+  // Pair a till the way an owner does: a code from the back office, typed in on the tablet.
+  const registerId = register.json().id as string;
+  const code = (await call('POST', `${base}/registers/${registerId}/pairing-code`, token)).json()
+    .code as string;
+  const paired = await app.inject({
+    method: 'POST',
+    url: '/devices/pair',
+    payload: { code, name: 'Test-iPad' },
+  });
+  expect(paired.statusCode).toBe(201);
+  deviceByRegister.set(registerId, paired.json().deviceToken);
+
   return {
     restaurantId,
-    registerId: register.json().id as string,
+    registerId,
     articleId: article.json().id as string,
     cashierId: cashier.json().userId as string,
   };
 }
 
-async function tillLogin(tenantId: string, registerId: string, userId: string, pin: string) {
+/** The till paired with each register in setUpRestaurant. */
+const deviceByRegister = new Map<string, string>();
+
+async function tillLogin(_tenantId: string, registerId: string, userId: string, pin: string) {
   return app.inject({
     method: 'POST',
     url: '/auth/login',
-    headers: { 'x-tenant-id': tenantId },
-    payload: { registerId, userId, pin },
+    headers: { 'x-device-token': deviceByRegister.get(registerId)! },
+    payload: { userId, pin },
   });
 }
 
@@ -99,12 +116,19 @@ async function sell(token: string, registerId: string, articleId: string, amount
 }
 
 describe('owner sign-up and approval', () => {
-  it('a new company is pending, can be set up, but cannot sell until approved', async () => {
+  it('a new company is pending: it can be set up and train, but cannot sell until approved', async () => {
     const owner = await signup();
     const setup = await setUpRestaurant(owner.token, owner.tenantId);
     const till = (
       await tillLogin(owner.tenantId, setup.registerId, setup.cashierId, '2580')
     ).json();
+
+    const training = await call('POST', `/registers/${setup.registerId}/receipts`, till.token, {
+      kind: 'training',
+      lines: [{ articleId: setup.articleId, quantity: 1 }],
+      payments: [{ method: 'card', amountOre: 12500 }],
+    });
+    expect(training.statusCode).toBe(201);
 
     const blocked = await sell(till.token, setup.registerId, setup.articleId, 12500);
     expect(blocked.statusCode).toBe(409);
@@ -319,6 +343,88 @@ describe('menu, staff and registers', () => {
         'register.retire',
       ]),
     );
+  });
+});
+
+describe('paired devices', () => {
+  it('revoking a till logs out everyone on it and stops it from logging in', async () => {
+    const owner = await signup();
+    await call('POST', `/platform/companies/${owner.tenantId}/approve`, adminToken);
+    const s = await setUpRestaurant(owner.token, owner.tenantId);
+    const till = (await tillLogin(owner.tenantId, s.registerId, s.cashierId, '2580')).json().token;
+
+    const { restaurants } = (
+      await call('GET', `/admin/tenants/${owner.tenantId}/restaurants`, owner.token)
+    ).json();
+    const device = restaurants[0].registers[0].devices[0];
+    expect(device).toMatchObject({ name: 'Test-iPad' });
+
+    await call('POST', `/admin/tenants/${owner.tenantId}/devices/${device.id}/revoke`, owner.token);
+    expect((await sell(till, s.registerId, s.articleId, 12500)).statusCode).toBe(401);
+    const again = await tillLogin(owner.tenantId, s.registerId, s.cashierId, '2580');
+    expect(again.json()).toMatchObject({ error: 'device_not_paired' });
+  });
+
+  it("a code can't be made for another company's register", async () => {
+    const mine = await signup();
+    const theirs = await signup();
+    const s = await setUpRestaurant(theirs.token, theirs.tenantId);
+    const res = await call(
+      'POST',
+      `/admin/tenants/${mine.tenantId}/registers/${s.registerId}/pairing-code`,
+      mine.token,
+    );
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('email', () => {
+  const tokenFrom = (text: string) => /token=([A-Za-z0-9_-]+)/.exec(text)![1]!;
+
+  it('sign-up sends a verification link that confirms the email once', async () => {
+    const owner = await signup();
+    const mail = mailer.lastTo(owner.email)!;
+    expect(mail.subject).toMatch(/Bekräfta/);
+
+    expect((await call('GET', '/admin/me', owner.token)).json().user.emailVerified).toBe(false);
+    const token = tokenFrom(mail.text);
+    const verify = () =>
+      app.inject({ method: 'POST', url: '/admin/verify-email', payload: { token } });
+    expect((await verify()).statusCode).toBe(200);
+    expect((await call('GET', '/admin/me', owner.token)).json().user.emailVerified).toBe(true);
+    expect((await verify()).json()).toMatchObject({ error: 'invalid_token' });
+  });
+
+  it('a password reset sets a new password and logs out old sessions', async () => {
+    const owner = await signup();
+    const request = await app.inject({
+      method: 'POST',
+      url: '/admin/password-reset',
+      payload: { email: owner.email.toUpperCase() },
+    });
+    expect(request.statusCode).toBe(204);
+    const token = tokenFrom(mailer.lastTo(owner.email)!.text);
+
+    const confirm = await app.inject({
+      method: 'POST',
+      url: '/admin/password-reset/confirm',
+      payload: { token, password: 'a brand new password' },
+    });
+    expect(confirm.statusCode).toBe(200);
+    expect((await call('GET', '/admin/me', owner.token)).statusCode).toBe(401);
+    expect((await login(owner.email, PASSWORD)).statusCode).toBe(401);
+    expect((await login(owner.email, 'a brand new password')).statusCode).toBe(200);
+  });
+
+  it('answers the same for an unknown email and sends nothing', async () => {
+    const before = mailer.sent.length;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/password-reset',
+      payload: { email: 'nobody@example.test' },
+    });
+    expect(res.statusCode).toBe(204);
+    expect(mailer.sent.length).toBe(before);
   });
 });
 

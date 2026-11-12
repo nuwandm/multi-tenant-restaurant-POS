@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { formatDateTime, formatOrgNumber, STATUS_LABELS } from '../format';
 import { useAction, useLoad } from '../useLoad';
@@ -9,6 +9,11 @@ export function RestaurantsPage({ tenantId }: { tenantId: string }) {
   const action = useAction();
   const [newRestaurant, setNewRestaurant] = useState({ name: '', address: '' });
   const [newRegister, setNewRegister] = useState<Record<string, string>>({});
+  const [pairing, setPairing] = useState<{
+    code: string;
+    expiresAt: string;
+    designation: string;
+  } | null>(null);
 
   async function addRestaurant(e: FormEvent) {
     e.preventDefault();
@@ -44,8 +49,29 @@ export function RestaurantsPage({ tenantId }: { tenantId: string }) {
     if (await action.run(() => api.retireRegister(tenantId, registerId))) reload();
   }
 
+  async function showCode(registerId: string, designation: string) {
+    await action.run(async () => {
+      const { code, expiresAt } = await api.pairingCode(tenantId, registerId);
+      setPairing({ code, expiresAt, designation });
+    });
+  }
+
+  async function revoke(deviceId: string, name: string) {
+    if (!window.confirm(`Koppla bort ${name}? Den som är inloggad där loggas ut direkt.`)) return;
+    if (await action.run(() => api.revokeDevice(tenantId, deviceId))) reload();
+  }
+
   return (
     <section>
+      {pairing && (
+        <PairingCodeDialog
+          {...pairing}
+          onClose={() => {
+            setPairing(null);
+            reload();
+          }}
+        />
+      )}
       <header className="page-header">
         <h1>Restauranger & kassor</h1>
       </header>
@@ -80,7 +106,7 @@ export function RestaurantsPage({ tenantId }: { tenantId: string }) {
                 <th>Kassa (kassabeteckning)</th>
                 <th>Status</th>
                 <th>Kontrollsystem</th>
-                <th>Skapad</th>
+                <th>Kopplade enheter</th>
                 <th />
               </tr>
             </thead>
@@ -89,7 +115,7 @@ export function RestaurantsPage({ tenantId }: { tenantId: string }) {
                 <tr key={c.id} className={c.status === 'retired' ? 'muted' : ''}>
                   <td>
                     <strong>{c.designation}</strong>
-                    <div className="muted small mono">ID {c.id}</div>
+                    <div className="muted small">Skapad {formatDateTime(c.createdAt)}</div>
                   </td>
                   <td>
                     {c.status === 'active'
@@ -97,16 +123,48 @@ export function RestaurantsPage({ tenantId }: { tenantId: string }) {
                       : `Avregistrerad ${c.retiredAt ? formatDateTime(c.retiredAt) : ''}`}
                   </td>
                   <td>{c.enrolled ? 'Ansluten' : 'Ej ansluten'}</td>
-                  <td>{formatDateTime(c.createdAt)}</td>
+                  <td className="small">
+                    {c.devices.length === 0 && <span className="muted">Ingen</span>}
+                    {c.devices.map((d) => (
+                      <div key={d.id} className="device">
+                        <span>
+                          {d.name}
+                          <span className="muted">
+                            {' '}
+                            ·{' '}
+                            {d.lastSeenAt
+                              ? `senast ${formatDateTime(d.lastSeenAt)}`
+                              : `kopplad ${formatDateTime(d.pairedAt)}`}
+                          </span>
+                        </span>
+                        <button
+                          className="link small"
+                          disabled={action.busy}
+                          onClick={() => revoke(d.id, d.name)}
+                        >
+                          Koppla bort
+                        </button>
+                      </div>
+                    ))}
+                  </td>
                   <td className="actions">
                     {c.status === 'active' && (
-                      <button
-                        className="secondary small"
-                        disabled={action.busy}
-                        onClick={() => retire(c.id, c.designation)}
-                      >
-                        Avregistrera
-                      </button>
+                      <>
+                        <button
+                          className="primary small"
+                          disabled={action.busy}
+                          onClick={() => showCode(c.id, c.designation)}
+                        >
+                          Koppla enhet
+                        </button>{' '}
+                        <button
+                          className="secondary small"
+                          disabled={action.busy}
+                          onClick={() => retire(c.id, c.designation)}
+                        >
+                          Avregistrera
+                        </button>
+                      </>
                     )}
                   </td>
                 </tr>
@@ -153,5 +211,45 @@ export function RestaurantsPage({ tenantId }: { tenantId: string }) {
         </button>
       </form>
     </section>
+  );
+}
+
+/** The one-time code to type on the till, with a countdown until it expires. */
+function PairingCodeDialog({
+  code,
+  expiresAt,
+  designation,
+  onClose,
+}: {
+  code: string;
+  expiresAt: string;
+  designation: string;
+  onClose: () => void;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const left = Math.max(0, Math.floor((new Date(expiresAt).getTime() - now) / 1000));
+  const mmss = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+
+  return (
+    <div className="overlay" role="dialog" aria-modal="true" aria-label="Kopplingskod">
+      <div className="dialog stack center">
+        <h2>Koppla en enhet till {designation}</h2>
+        <p className="muted small">
+          Öppna kassan på surfplattan eller datorn och skriv in koden. Koden kan bara användas en
+          gång.
+        </p>
+        <p className="pairing-code">{left > 0 ? code : '––––-––––'}</p>
+        <p className={left > 0 ? 'muted' : 'error'}>
+          {left > 0 ? `Gäller i ${mmss}` : 'Koden har gått ut. Stäng och skapa en ny.'}
+        </p>
+        <button className="primary" onClick={onClose}>
+          Klar
+        </button>
+      </div>
+    </div>
   );
 }

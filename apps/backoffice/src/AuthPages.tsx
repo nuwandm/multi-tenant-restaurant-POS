@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { api } from './api';
+import { ForgotPasswordForm } from './LinkPages';
 import { useAction } from './useLoad';
 
 interface Props {
@@ -7,22 +8,32 @@ interface Props {
 }
 
 export function AuthPages({ onLoggedIn }: Props) {
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login');
   return (
     <div className="auth">
       <div className="auth-card">
         <p className="brand">Restaurang POS</p>
-        {mode === 'login' ? (
-          <LoginForm onLoggedIn={onLoggedIn} onSignup={() => setMode('signup')} />
-        ) : (
+        {mode === 'login' && (
+          <LoginForm
+            onLoggedIn={onLoggedIn}
+            onSignup={() => setMode('signup')}
+            onForgot={() => setMode('forgot')}
+          />
+        )}
+        {mode === 'signup' && (
           <SignupForm onLoggedIn={onLoggedIn} onLogin={() => setMode('login')} />
         )}
+        {mode === 'forgot' && <ForgotPasswordForm onBack={() => setMode('login')} />}
       </div>
     </div>
   );
 }
 
-function LoginForm({ onLoggedIn, onSignup }: Props & { onSignup: () => void }) {
+function LoginForm({
+  onLoggedIn,
+  onSignup,
+  onForgot,
+}: Props & { onSignup: () => void; onForgot: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { busy, error, run } = useAction();
@@ -59,6 +70,11 @@ function LoginForm({ onLoggedIn, onSignup }: Props & { onSignup: () => void }) {
       <button className="primary" disabled={busy}>
         {busy ? 'Loggar in…' : 'Logga in'}
       </button>
+      <p className="muted center">
+        <button type="button" className="link" onClick={onForgot}>
+          Glömt lösenord?
+        </button>
+      </p>
       <p className="muted center">
         Ny restaurang?{' '}
         <button type="button" className="link" onClick={onSignup}>

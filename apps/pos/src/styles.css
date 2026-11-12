@@ -708,3 +708,40 @@ button:disabled {
     border: none;
   }
 }
+
+/* Pairing */
+
+.pairing {
+  max-width: 420px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pairing ol {
+  padding-left: 20px;
+  line-height: 1.6;
+}
+
+.code-input {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 1.6rem;
+  letter-spacing: 0.15em;
+  text-align: center;
+}
+
+.field input {
+  font: inherit;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.notice {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--warn-soft);
+  color: var(--warn);
+}

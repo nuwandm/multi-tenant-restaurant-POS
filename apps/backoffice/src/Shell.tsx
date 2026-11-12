@@ -131,6 +131,7 @@ export function Shell({ me, onChanged, onLogout }: Props) {
       </aside>
 
       <main className="content">
+        {!me.user.emailVerified && me.user.email && <VerifyBanner email={me.user.email} />}
         {page === 'overview' && <OverviewPage />}
         {page === 'platform' && me.isPlatformAdmin && <PlatformPage />}
         {company && page === 'restaurants' && <RestaurantsPage tenantId={company.tenantId} />}
@@ -213,5 +214,27 @@ function AddCompanyDialog({
         </div>
       </form>
     </div>
+  );
+}
+
+function VerifyBanner({ email }: { email: string }) {
+  const [sent, setSent] = useState(false);
+  const { busy, error, run } = useAction();
+  return (
+    <p className="notice">
+      Bekräfta din e-postadress {email} via länken vi skickade.{' '}
+      {sent ? (
+        'Ny länk skickad.'
+      ) : (
+        <button
+          className="link"
+          disabled={busy}
+          onClick={async () => setSent(await run(() => api.resendVerification()))}
+        >
+          Skicka igen
+        </button>
+      )}
+      {error && ` ${error}`}
+    </p>
   );
 }

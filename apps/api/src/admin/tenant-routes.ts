@@ -7,6 +7,7 @@ import type { Role } from '../auth/session';
 import { withTenant } from '../db/tenant';
 import { HttpError } from '../errors';
 import { uuid } from '../http-schemas';
+import { hashPairingCode, newPairingCode, PAIRING_CODE_MINUTES } from '../auth/device';
 import { audit, requireTenantAdmin, type AdminContext } from './admin-session';
 
 const integer = { type: 'integer' } as const;
@@ -72,6 +73,16 @@ export function tenantAdminRoutes(app: FastifyInstance, deps: AppDeps) {
           }[]
         >`SELECT id, restaurant_id, designation, status, control_system_ref, created_at, retired_at
         FROM cash_registers ORDER BY designation`;
+        const devices = await tx<
+          {
+            id: string;
+            register_id: string;
+            name: string;
+            paired_at: Date;
+            last_seen_at: Date | null;
+          }[]
+        >`SELECT id, register_id, name, paired_at, last_seen_at FROM devices
+          WHERE revoked_at IS NULL ORDER BY paired_at`;
         const [tenant] = await tx<{ legal_name: string; org_number: string; status: string }[]>`
         SELECT legal_name, org_number, status FROM tenants`;
         return {
@@ -89,6 +100,14 @@ export function tenantAdminRoutes(app: FastifyInstance, deps: AppDeps) {
                 enrolled: c.control_system_ref !== null,
                 createdAt: c.created_at,
                 retiredAt: c.retired_at,
+                devices: devices
+                  .filter((d) => d.register_id === c.id)
+                  .map((d) => ({
+                    id: d.id,
+                    name: d.name,
+                    pairedAt: d.paired_at,
+                    lastSeenAt: d.last_seen_at,
+                  })),
               })),
           })),
         };
@@ -166,8 +185,48 @@ export function tenantAdminRoutes(app: FastifyInstance, deps: AppDeps) {
           UPDATE cash_registers SET status = 'retired', retired_at = now()
           WHERE id = ${req.params.registerId} AND status = 'active' RETURNING id`;
         if (!row) throw new HttpError(404, 'register_not_found', 'No active register with that id');
+        await revokeDevices(tx, { registerId: row.id });
         await audit(tx, ctx, 'register.retire', row.id);
         return { id: row.id, status: 'retired' };
+      });
+    },
+  );
+
+  // A one-time code the till types in to become this register. Valid 15 minutes, single use.
+  app.post<{ Params: P<'registerId'> }>(
+    `${base}/registers/:registerId/pairing-code`,
+    { preHandler, schema: { params: params('registerId') } },
+    async (req, reply) => {
+      const ctx = req.adminTenant!;
+      const code = newPairingCode();
+      const expiresAt = new Date(Date.now() + PAIRING_CODE_MINUTES * 60_000);
+      await inTenant(deps, ctx, async (tx) => {
+        const [register] = await tx`
+          SELECT 1 FROM cash_registers WHERE id = ${req.params.registerId} AND status = 'active'`;
+        if (!register)
+          throw new HttpError(404, 'register_not_found', 'No active register with that id');
+        await tx`
+          INSERT INTO pairing_codes (code_hash, tenant_id, register_id, created_by, expires_at)
+          VALUES (${hashPairingCode(code)}, ${ctx.tenantId}, ${req.params.registerId}, ${ctx.userId},
+                  ${expiresAt})`;
+        await audit(tx, ctx, 'device.pairing_code', req.params.registerId);
+      });
+      return reply.status(201).send({ code, expiresAt });
+    },
+  );
+
+  // Unpairs a till at once, e.g. a lost tablet. Anyone logged in on it is logged out.
+  app.post<{ Params: P<'deviceId'> }>(
+    `${base}/devices/:deviceId/revoke`,
+    { preHandler, schema: { params: params('deviceId') } },
+    async (req) => {
+      const ctx = req.adminTenant!;
+      return inTenant(deps, ctx, async (tx) => {
+        const revoked = await revokeDevices(tx, { deviceId: req.params.deviceId });
+        if (revoked.length === 0)
+          throw new HttpError(404, 'device_not_found', 'No paired device with that id');
+        await audit(tx, ctx, 'device.revoke', req.params.deviceId);
+        return { id: req.params.deviceId, revoked: true };
       });
     },
   );
@@ -594,6 +653,22 @@ export function tenantAdminRoutes(app: FastifyInstance, deps: AppDeps) {
         }));
       }),
   );
+}
+
+/** Revokes one device or every device on a register, and logs out anyone using them. */
+async function revokeDevices(
+  tx: TransactionSql,
+  target: { deviceId: string } | { registerId: string },
+): Promise<string[]> {
+  const deviceId = 'deviceId' in target ? target.deviceId : null;
+  const registerId = 'registerId' in target ? target.registerId : null;
+  const rows = await tx<{ id: string }[]>`
+    UPDATE devices SET revoked_at = now()
+    WHERE revoked_at IS NULL
+      AND (id = ${deviceId}::uuid OR register_id = ${registerId}::uuid)
+    RETURNING id`;
+  for (const { id } of rows) await tx`SELECT app_end_device_sessions(${id})`;
+  return rows.map((r) => r.id);
 }
 
 async function assertGroupInRestaurant(tx: TransactionSql, groupId: string, restaurantId: string) {

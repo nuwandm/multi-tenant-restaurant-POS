@@ -74,6 +74,8 @@ VALUES ('d0000000-0000-0000-0000-0000000000ad', 'admin@demo.local', 'Plattformsa
         'scrypt$355d646fd93de2a6a4a9ad60b2973f4a$0dfe1e178d68c41baa9aaa0ce596954c5a733f576b7d0b1e45d6b7dcf08a757b')
 ON CONFLICT DO NOTHING;
 INSERT INTO platform_admins (user_id) VALUES ('d0000000-0000-0000-0000-0000000000ad') ON CONFLICT DO NOTHING;
+UPDATE users SET email_verified_at = coalesce(email_verified_at, now())
+WHERE id IN ('d0000000-0000-0000-0000-0000000000ad', 'd0000000-0000-0000-0000-000000000f01');
 \echo 'Seeded: tenant d0000000-0000-0000-0000-000000000001, register d0000000-0000-0000-0000-0000000000c1'
 \echo 'Till: Anna (manager) PIN 1234, Erik (cashier) PIN 0000'
 \echo 'Back office: anna@demo.local / demo-anna-2026 (manager), admin@demo.local / demo-admin-2026 (platform admin)'

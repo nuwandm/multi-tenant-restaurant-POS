@@ -6,7 +6,6 @@ import type {
   VatTotal,
   ZReportTotals,
 } from '@pos/domain';
-import { REGISTER_ID, TENANT_ID } from './config';
 
 export interface Article {
   id: string;
@@ -77,53 +76,89 @@ const ERROR_TEXT: Record<string, string> = {
   control_system_unavailable: 'Kontrollsystemet svarar inte. Inget kvitto skapades.',
   register_retired: 'Kassan är avregistrerad.',
   article_unavailable: 'En vara finns inte längre i menyn. Töm ordern och försök igen.',
+  company_pending:
+    'Företaget väntar på godkännande och kan inte sälja än. Träna gärna under tiden.',
+  company_suspended: 'Företaget är avstängt och kan inte sälja.',
+  invalid_pairing_code: 'Koden är fel, använd eller har gått ut. Skapa en ny i back office.',
+  device_not_paired: 'Den här enheten är inte kopplad till någon kassa.',
 };
 
-const TOKEN_KEY = 'pos.sessionToken';
+// Kept per device: the device token (which register this is) and the staff session token.
+const DEVICE_KEY = 'pos.deviceToken';
+const SESSION_KEY = 'pos.sessionToken';
 
-// The session token is kept per device so a page reload doesn't log the cashier out.
-let token: string | null = (() => {
+function load(key: string): string | null {
   try {
-    return localStorage.getItem(TOKEN_KEY);
+    return localStorage.getItem(key);
   } catch {
     return null;
   }
-})();
+}
 
-function setToken(value: string | null) {
-  token = value;
+function store(key: string, value: string | null) {
   try {
-    if (value) localStorage.setItem(TOKEN_KEY, value);
-    else localStorage.removeItem(TOKEN_KEY);
+    if (value) localStorage.setItem(key, value);
+    else localStorage.removeItem(key);
   } catch {
-    // Storage blocked: the session just won't survive a reload.
+    // Storage blocked: pairing and login just won't survive a reload.
   }
 }
 
+let deviceToken = load(DEVICE_KEY);
+let token = load(SESSION_KEY);
+/** Set from GET /device; every register-scoped call uses it. */
+let registerId = '';
+
+function setToken(value: string | null) {
+  token = value;
+  store(SESSION_KEY, value);
+}
+
+function setDeviceToken(value: string | null) {
+  deviceToken = value;
+  store(DEVICE_KEY, value);
+  if (!value) setToken(null);
+}
+
+export const isPaired = () => deviceToken !== null;
+
 let onLoggedOut: () => void = () => {};
+let onUnpaired: () => void = () => {};
 
 /** Called when the API says the session is gone (expired, logged out elsewhere). */
 export function setLoggedOutHandler(handler: () => void) {
   onLoggedOut = handler;
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+/** Called when the device has been revoked in the back office. */
+export function setUnpairedHandler(handler: () => void) {
+  onUnpaired = handler;
+}
+
+async function request<T>(
+  path: string,
+  init: RequestInit & { idempotencyKey?: string } = {},
+): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`/api${path}`, {
       ...init,
       headers: {
-        'x-tenant-id': TENANT_ID,
+        ...(deviceToken ? { 'x-device-token': deviceToken } : {}),
         ...(token ? { authorization: `Bearer ${token}` } : {}),
         ...(init.body ? { 'content-type': 'application/json' } : {}),
+        ...(init.idempotencyKey ? { 'idempotency-key': init.idempotencyKey } : {}),
       },
     });
   } catch {
-    throw new ApiError('Ingen kontakt med servern. Kontrollera att API:t körs (pnpm dev:api).');
+    throw new ApiError('Ingen kontakt med servern. Kontrollera nätverket och försök igen.');
   }
   const body = (await res.json().catch(() => null)) as { error?: string; message?: string } | null;
   if (!res.ok) {
-    if (res.status === 401 && body?.error === 'not_logged_in' && token) {
+    if (res.status === 401 && body?.error === 'device_not_paired' && deviceToken) {
+      setDeviceToken(null);
+      onUnpaired();
+    } else if (res.status === 401 && body?.error === 'not_logged_in' && token) {
       setToken(null);
       onLoggedOut();
     }
@@ -142,18 +177,40 @@ export interface Staff {
   role: Role;
 }
 
-export interface LoginInfo {
+export interface DeviceInfo {
+  device: { id: string; name: string };
   register: { id: string; designation: string; status: string };
   restaurant: { name: string };
+  company: { legalName: string; status: 'pending' | 'active' | 'suspended' };
   staff: Staff[];
 }
 
-export const getLoginInfo = () => request<LoginInfo>(`/registers/${REGISTER_ID}/login-info`);
+/** Uses a pairing code from the back office. The device is this register from then on. */
+export async function pairDevice(code: string, name: string): Promise<void> {
+  const res = await request<{ deviceToken: string }>('/devices/pair', {
+    method: 'POST',
+    body: JSON.stringify({ code, name }),
+  });
+  setDeviceToken(res.deviceToken);
+}
+
+/** Which register this device is, its company and who can log in. Null if not paired. */
+export async function getDevice(): Promise<DeviceInfo | null> {
+  if (!deviceToken) return null;
+  try {
+    const info = await request<DeviceInfo>('/device');
+    registerId = info.register.id;
+    return info;
+  } catch (err) {
+    if (err instanceof ApiError && err.code === 'device_not_paired') return null;
+    throw err;
+  }
+}
 
 export async function login(userId: string, pin: string): Promise<Staff> {
   const res = await request<{ token: string; staff: Staff }>('/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ registerId: REGISTER_ID, userId, pin }),
+    body: JSON.stringify({ userId, pin }),
   });
   setToken(res.token);
   return res.staff;
@@ -164,7 +221,7 @@ export async function currentStaff(): Promise<Staff | null> {
   if (!token) return null;
   try {
     const res = await request<{ staff: Staff; registerId: string }>('/auth/session');
-    if (res.registerId === REGISTER_ID) return res.staff;
+    if (res.registerId === registerId) return res.staff;
   } catch {
     // Fall through to logged out.
   }
@@ -185,27 +242,35 @@ export const isManager = (staff: Staff) => staff.role === 'owner' || staff.role 
 export const getHealth = () =>
   request<{ status: string; controlSystem: { online: boolean } }>('/health');
 
-export const getMenu = () => request<Menu>(`/registers/${REGISTER_ID}/menu`);
+export const getMenu = () => request<Menu>(`/registers/${registerId}/menu`);
 
-const post = <T>(path: string, body?: object) =>
-  request<T>(`/registers/${REGISTER_ID}/${path}`, {
+/** A new key per payment attempt; reuse it when retrying the same attempt. */
+export const newAttemptKey = () => crypto.randomUUID();
+
+const post = <T>(path: string, body?: object, idempotencyKey?: string) =>
+  request<T>(`/registers/${registerId}/${path}`, {
     method: 'POST',
     ...(body && { body: JSON.stringify(body) }),
+    ...(idempotencyKey && { idempotencyKey }),
   });
 
-export const createReceipt = (receipt: NewReceipt) => post<Receipt>('receipts', receipt);
+export const createReceipt = (receipt: NewReceipt, idempotencyKey: string) =>
+  post<Receipt>('receipts', receipt, idempotencyKey);
 
 export const listReceipts = (limit = 30) =>
-  request<ListedReceipt[]>(`/registers/${REGISTER_ID}/receipts?limit=${limit}`);
+  request<ListedReceipt[]>(`/registers/${registerId}/receipts?limit=${limit}`);
 
-export const createReturn = (body: {
-  originalReceiptId: string;
-  lines: { lineNo: number; quantity: number }[];
-  payments: { method: PaymentMethod; amountOre: number }[];
-}) => post<Receipt>('returns', body);
+export const createReturn = (
+  body: {
+    originalReceiptId: string;
+    lines: { lineNo: number; quantity: number }[];
+    payments: { method: PaymentMethod; amountOre: number }[];
+  },
+  idempotencyKey: string,
+) => post<Receipt>('returns', body, idempotencyKey);
 
-export const createCopy = (originalReceiptId: string) =>
-  post<Receipt>('copies', { originalReceiptId });
+export const createCopy = (originalReceiptId: string, idempotencyKey: string) =>
+  post<Receipt>('copies', { originalReceiptId }, idempotencyKey);
 
 export const createXReport = () => post<Report>('x-reports');
 

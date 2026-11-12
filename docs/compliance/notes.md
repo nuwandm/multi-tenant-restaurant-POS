@@ -10,5 +10,5 @@ Our interpretation of the rules, with open questions. Each entry should cite a s
 - **Who may take reports.** Z reports and returns need a manager or owner login; cashiers can sell, print copies and take X reports. Check with the accountant whether X reports should be restricted too.
 - **Copies.** A copy is signed and numbered in its own series and shows the original's payments, but stores no payments, so payment totals only count real money. Confirm that the copy should carry its own control code.
 - **Cash rounding.** Only the cash part of a payment is rounded to whole kronor (0–49 öre down, 50–99 öre up). The rounding is stored per receipt and totalled on the Z report. Confirm how it should be shown on the receipt.
-- **Retried requests.** If the till loses its connection after the API has stored a sale, a retry creates a second receipt. Phase 4 adds an `Idempotency-Key` header so a retry returns the first receipt instead.
+- **Retried requests.** Solved: the till sends an `Idempotency-Key` per payment attempt and reuses it when retrying, so a retry returns the receipt already made instead of a second one.
 - **Food VAT in 2026–2027.** Confirm with the accountant which rate applies to restaurant food and takeaway during the temporary food VAT reduction before Phase 2 makes VAT rates date-effective.

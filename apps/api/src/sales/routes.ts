@@ -1,6 +1,7 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { AppDeps } from '../app';
 import { requireStaff } from '../auth/session';
+import { HttpError } from '../errors';
 import { registerParams, uuid } from '../http-schemas';
 import {
   createCopy,
@@ -103,6 +104,20 @@ const listReceiptsSchema = {
 
 type RegisterRequest = { Params: { registerId: string } };
 
+/** The till's key for one payment attempt; a retry with the same key gets the same receipt. */
+function idempotencyKey(req: FastifyRequest): string | null {
+  const key = req.headers['idempotency-key'];
+  if (key === undefined) return null;
+  if (typeof key !== 'string' || !/^[\w-]{8,100}$/.test(key)) {
+    throw new HttpError(
+      400,
+      'invalid_idempotency_key',
+      'Idempotency-Key must be 8–100 letters, digits, - or _',
+    );
+  }
+  return key;
+}
+
 export function salesRoutes(app: FastifyInstance, deps: AppDeps) {
   const anyStaff = requireStaff(deps.sql);
   const managers = requireStaff(deps.sql, ['owner', 'manager']);
@@ -110,7 +125,8 @@ export function salesRoutes(app: FastifyInstance, deps: AppDeps) {
   app.post<RegisterRequest & { Body: CreateReceiptRequest }>(
     '/registers/:registerId/receipts',
     { schema: createReceiptSchema, preHandler: anyStaff },
-    async (req, reply) => reply.status(201).send(await createReceipt(deps, req.staff!, req.body)),
+    async (req, reply) =>
+      reply.status(201).send(await createReceipt(deps, req.staff!, req.body, idempotencyKey(req))),
   );
 
   app.get<RegisterRequest & { Querystring: { limit: number } }>(
@@ -123,13 +139,16 @@ export function salesRoutes(app: FastifyInstance, deps: AppDeps) {
   app.post<RegisterRequest & { Body: CreateReturnRequest }>(
     '/registers/:registerId/returns',
     { schema: createReturnSchema, preHandler: managers },
-    async (req, reply) => reply.status(201).send(await createReturn(deps, req.staff!, req.body)),
+    async (req, reply) =>
+      reply.status(201).send(await createReturn(deps, req.staff!, req.body, idempotencyKey(req))),
   );
 
   app.post<RegisterRequest & { Body: { originalReceiptId: string } }>(
     '/registers/:registerId/copies',
     { schema: createCopySchema, preHandler: anyStaff },
     async (req, reply) =>
-      reply.status(201).send(await createCopy(deps, req.staff!, req.body.originalReceiptId)),
+      reply
+        .status(201)
+        .send(await createCopy(deps, req.staff!, req.body.originalReceiptId, idempotencyKey(req))),
   );
 }

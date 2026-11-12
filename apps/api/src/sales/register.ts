@@ -32,7 +32,7 @@ interface RegisterRow {
 export async function lockRegister(
   tx: TransactionSql,
   registerId: string,
-  options: { forSelling: boolean },
+  options: { forSelling: boolean; allowPending?: boolean },
 ): Promise<LockedRegister> {
   const [row] = await tx<RegisterRow[]>`
     SELECT r.restaurant_id, r.designation, r.status, r.control_system_ref, r.created_at,
@@ -44,7 +44,8 @@ export async function lockRegister(
   if (!row) throw new HttpError(404, 'register_not_found', 'Register not found');
 
   if (options.forSelling) {
-    if (row.tenant_status !== 'active') {
+    const trainingWhilePending = options.allowPending && row.tenant_status === 'pending';
+    if (row.tenant_status !== 'active' && !trainingWhilePending) {
       throw new HttpError(
         409,
         row.tenant_status === 'pending' ? 'company_pending' : 'company_suspended',

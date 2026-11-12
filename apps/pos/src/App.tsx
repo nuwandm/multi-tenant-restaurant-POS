@@ -1,10 +1,11 @@
 import { buildReceipt, ore, type PaymentMethod } from '@pos/domain';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   createReceipt,
   getHealth,
   getMenu,
   isManager,
+  newAttemptKey,
   type Article,
   type Menu,
   type Receipt,
@@ -25,17 +26,21 @@ const message = (err: unknown) => (err instanceof Error ? err.message : String(e
 
 interface Props {
   staff: Staff;
+  companyStatus: 'pending' | 'active' | 'suspended';
   onLogout: () => void;
 }
 
-export function App({ staff, onLogout }: Props) {
+export function App({ staff, companyStatus, onLogout }: Props) {
   const manager = isManager(staff);
+  // Until the company is approved the till can only train.
+  const trainingOnly = companyStatus === 'pending';
+  const attempt = useRef<{ signature: string; key: string } | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [online, setOnline] = useState<boolean | null>(null);
   const [groupIndex, setGroupIndex] = useState(0);
   const [basket, setBasket] = useState<BasketLine[]>([]);
-  const [training, setTraining] = useState(false);
+  const [training, setTraining] = useState(trainingOnly);
   const [cashOpen, setCashOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,12 +105,20 @@ export function App({ staff, onLogout }: Props) {
   async function pay(method: PaymentMethod, amountOre: number, changeOre = 0) {
     setBusy(true);
     setError(null);
+    const body = {
+      kind: training ? ('training' as const) : ('sale' as const),
+      lines: basket.map((l) => ({ articleId: l.article.id, quantity: l.quantity })),
+      payments: [{ method, amountOre }],
+    };
+    // Tapping pay again for the same order after a lost connection reuses the key, so the
+    // API returns the receipt it already made instead of charging twice.
+    const signature = JSON.stringify(body);
+    if (attempt.current?.signature !== signature) {
+      attempt.current = { signature, key: newAttemptKey() };
+    }
     try {
-      const receipt = await createReceipt({
-        kind: training ? 'training' : 'sale',
-        lines: basket.map((l) => ({ articleId: l.article.id, quantity: l.quantity })),
-        payments: [{ method, amountOre }],
-      });
+      const receipt = await createReceipt(body, attempt.current.key);
+      attempt.current = null;
       setCashOpen(false);
       setDone({ receipt, changeOre });
     } catch (err) {
@@ -172,7 +185,7 @@ export function App({ staff, onLogout }: Props) {
             <input
               type="checkbox"
               checked={training}
-              disabled={basket.length > 0}
+              disabled={basket.length > 0 || trainingOnly}
               onChange={(e) => setTraining(e.target.checked)}
             />
             Träningsläge

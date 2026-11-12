@@ -3,6 +3,7 @@ import {
   buildCopy,
   buildReceipt,
   buildReturn,
+  type BuiltReceipt,
   ore,
   type PaymentMethod,
   type VatRate,
@@ -12,7 +13,7 @@ import type { StaffSession } from '../auth/session';
 import { withTenant } from '../db/tenant';
 import { HttpError } from '../errors';
 import { loadReceipts, type LoadedReceipt } from './load-receipts';
-import { lockRegister } from './register';
+import { lockRegister, type LockedRegister } from './register';
 import { storeReceipt, type StoredReceipt } from './store-receipt';
 
 type Deps = { sql: Sql; controlSystem: ControlSystem };
@@ -43,21 +44,57 @@ interface ArticleRow {
 const toPayments = (payments: PaymentRequest) =>
   payments.map((p) => ({ method: p.method, amountOre: ore(p.amountOre) }));
 
+/**
+ * Locks the register and, if this idempotency key already made a receipt on it, returns that
+ * receipt instead of making another. Otherwise builds and stores a new one.
+ */
+async function onceOnRegister(
+  deps: Deps,
+  staff: StaffSession,
+  idempotencyKey: string | null,
+  allowPending: boolean,
+  make: (
+    tx: TransactionSql,
+    register: LockedRegister,
+  ) => Promise<{ built: BuiltReceipt; originalReceiptId?: string }>,
+): Promise<StoredReceipt> {
+  return withTenant(deps.sql, staff.tenantId, async (tx) => {
+    const register = await lockRegister(tx, staff.registerId, { forSelling: true, allowPending });
+    if (idempotencyKey) {
+      const [earlier] = await tx<{ id: string }[]>`
+        SELECT id FROM receipts
+        WHERE register_id = ${staff.registerId} AND idempotency_key = ${idempotencyKey}`;
+      if (earlier) return (await loadReceipts(tx, [earlier.id]))[0]!;
+    }
+    const { built, originalReceiptId = null } = await make(tx, register);
+    return storeReceipt(
+      tx,
+      deps.controlSystem,
+      staff,
+      register,
+      built,
+      originalReceiptId,
+      idempotencyKey,
+    );
+  });
+}
+
 /** Sale, training or proforma receipt, priced from the register's menu. */
 export async function createReceipt(
   deps: Deps,
   staff: StaffSession,
   request: CreateReceiptRequest,
+  idempotencyKey: string | null = null,
 ): Promise<StoredReceipt> {
-  return withTenant(deps.sql, staff.tenantId, async (tx) => {
-    const register = await lockRegister(tx, staff.registerId, { forSelling: true });
-    const built = buildReceipt({
+  // A company waiting for approval may ring up training receipts, never real sales.
+  const training = request.kind === 'training';
+  return onceOnRegister(deps, staff, idempotencyKey, training, async (tx, register) => ({
+    built: buildReceipt({
       kind: request.kind,
       lines: await priceLines(tx, register.restaurantId, request.lines),
       payments: toPayments(request.payments),
-    });
-    return storeReceipt(tx, deps.controlSystem, staff, register, built);
-  });
+    }),
+  }));
 }
 
 /** Return of all or part of a sale, from any register of the same company. */
@@ -65,18 +102,20 @@ export async function createReturn(
   deps: Deps,
   staff: StaffSession,
   request: CreateReturnRequest,
+  idempotencyKey: string | null = null,
 ): Promise<StoredReceipt> {
-  return withTenant(deps.sql, staff.tenantId, async (tx) => {
-    const register = await lockRegister(tx, staff.registerId, { forSelling: true });
+  return onceOnRegister(deps, staff, idempotencyKey, false, async (tx) => {
     // Two returns of the same receipt on different registers must not both pass the check.
     await tx`SELECT pg_advisory_xact_lock(hashtextextended(${request.originalReceiptId}, 0))`;
     const original = await loadOriginal(tx, request.originalReceiptId);
-    const built = buildReturn(original, {
-      lines: request.lines,
-      alreadyReturned: original.returnedQuantities,
-      payments: toPayments(request.payments),
-    });
-    return storeReceipt(tx, deps.controlSystem, staff, register, built, original.id);
+    return {
+      built: buildReturn(original, {
+        lines: request.lines,
+        alreadyReturned: original.returnedQuantities,
+        payments: toPayments(request.payments),
+      }),
+      originalReceiptId: original.id,
+    };
   });
 }
 
@@ -85,11 +124,11 @@ export async function createCopy(
   deps: Deps,
   staff: StaffSession,
   originalReceiptId: string,
+  idempotencyKey: string | null = null,
 ): Promise<StoredReceipt> {
-  return withTenant(deps.sql, staff.tenantId, async (tx) => {
-    const register = await lockRegister(tx, staff.registerId, { forSelling: true });
+  return onceOnRegister(deps, staff, idempotencyKey, false, async (tx) => {
     const original = await loadOriginal(tx, originalReceiptId);
-    return storeReceipt(tx, deps.controlSystem, staff, register, buildCopy(original), original.id);
+    return { built: buildCopy(original), originalReceiptId: original.id };
   });
 }
 

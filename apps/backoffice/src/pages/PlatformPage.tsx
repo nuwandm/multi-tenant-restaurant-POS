@@ -58,6 +58,7 @@ export function PlatformPage() {
               <th>Status</th>
               <th className="num">Restauranger</th>
               <th className="num">Kassor</th>
+              <th className="num">Enheter</th>
               <th className="num">Personal</th>
               <th>Senaste försäljning</th>
               <th className="num">30 dagar</th>
@@ -75,7 +76,12 @@ export function PlatformPage() {
                 </td>
                 <td>
                   {c.owner?.name}
-                  <div className="muted small">{c.owner?.email}</div>
+                  <div className="muted small">
+                    {c.owner?.email}{' '}
+                    {c.owner && !c.owner.emailVerified && (
+                      <span className="badge badge-pending">Ej bekräftad</span>
+                    )}
+                  </div>
                 </td>
                 <td>
                   <span className={`badge badge-${c.status}`}>{STATUS_LABELS[c.status]}</span>
@@ -84,6 +90,7 @@ export function PlatformPage() {
                 <td className="num">
                   {c.activeRegisters}/{c.registers}
                 </td>
+                <td className="num">{c.devices}</td>
                 <td className="num">{c.staff}</td>
                 <td>
                   {c.lastSaleAt ? formatDateTime(c.lastSaleAt) : <span className="muted">–</span>}
@@ -122,7 +129,7 @@ export function PlatformPage() {
             ))}
             {companies.length === 0 && (
               <tr>
-                <td colSpan={9} className="muted">
+                <td colSpan={10} className="muted">
                   Inga företag här.
                 </td>
               </tr>

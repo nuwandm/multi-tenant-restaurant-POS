@@ -1,6 +1,13 @@
 import { divRound, ore, roundToKrona, type PaymentMethod } from '@pos/domain';
 import { useEffect, useState } from 'react';
-import { createCopy, createReturn, listReceipts, type ListedReceipt, type Receipt } from './api';
+import {
+  createCopy,
+  createReturn,
+  listReceipts,
+  newAttemptKey,
+  type ListedReceipt,
+  type Receipt,
+} from './api';
 import { formatDateTime, formatKr, PAYMENT_LABELS } from './format';
 
 interface Props {
@@ -25,6 +32,8 @@ export function ReceiptsDialog({ onDone, onClose, canReturn }: Props) {
   const [receipts, setReceipts] = useState<ListedReceipt[] | null>(null);
   const [selected, setSelected] = useState<ListedReceipt | null>(null);
   const [returning, setReturning] = useState(false);
+  // One key per opened receipt: retrying a copy or return after a lost connection is safe.
+  const [attemptKey, setAttemptKey] = useState(newAttemptKey);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,6 +87,7 @@ export function ReceiptsDialog({ onDone, onClose, canReturn }: Props) {
                   type="button"
                   onClick={() => {
                     setSelected(r);
+                    setAttemptKey(newAttemptKey());
                     setReturning(false);
                     setError(null);
                   }}
@@ -119,7 +129,7 @@ export function ReceiptsDialog({ onDone, onClose, canReturn }: Props) {
                 type="button"
                 className="secondary"
                 disabled={busy || selected.kind === 'copy'}
-                onClick={() => run(() => createCopy(selected.id))}
+                onClick={() => run(() => createCopy(selected.id, attemptKey))}
               >
                 Skriv kopia
               </button>
@@ -142,11 +152,14 @@ export function ReceiptsDialog({ onDone, onClose, canReturn }: Props) {
             busy={busy}
             onSubmit={(lines, method, amountOre) =>
               run(() =>
-                createReturn({
-                  originalReceiptId: selected.id,
-                  lines,
-                  payments: [{ method, amountOre }],
-                }),
+                createReturn(
+                  {
+                    originalReceiptId: selected.id,
+                    lines,
+                    payments: [{ method, amountOre }],
+                  },
+                  attemptKey,
+                ),
               )
             }
           />

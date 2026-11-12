@@ -11,7 +11,7 @@ export interface Company {
 }
 
 export interface Me {
-  user: { userId: string; displayName: string; email: string | null };
+  user: { userId: string; displayName: string; email: string | null; emailVerified: boolean };
   isPlatformAdmin: boolean;
   companies: Company[];
 }
@@ -23,6 +23,7 @@ export interface Register {
   enrolled: boolean;
   createdAt: string;
   retiredAt: string | null;
+  devices: { id: string; name: string; pairedAt: string; lastSeenAt: string | null }[];
 }
 
 export interface Restaurant {
@@ -97,7 +98,8 @@ export interface PlatformCompany {
   status: CompanyStatus;
   createdAt: string;
   statusChangedAt: string | null;
-  owner: { name: string; email: string | null } | null;
+  owner: { name: string; email: string | null; emailVerified: boolean } | null;
+  devices: number;
   restaurants: number;
   registers: number;
   activeRegisters: number;
@@ -118,6 +120,8 @@ const ERROR_TEXT: Record<string, string> = {
   forbidden: 'Du har inte behörighet att göra detta.',
   cannot_change_self: 'Du kan inte inaktivera dig själv eller ändra din egen roll.',
   cashier_no_password: 'Kassörer använder bara kassan och får inget lösenord.',
+  invalid_token: 'Länken är fel, redan använd eller har gått ut.',
+  register_not_found: 'Kassan finns inte eller är avregistrerad.',
   company_not_found: 'Företaget hittades inte.',
 };
 
@@ -203,6 +207,11 @@ export const api = {
     }
   },
   me: () => get<Me>('/admin/me'),
+  resendVerification: () => post('/admin/resend-verification'),
+  verifyEmail: (token: string) => post('/admin/verify-email', { token }),
+  requestPasswordReset: (email: string) => post('/admin/password-reset', { email }),
+  confirmPasswordReset: (token: string, password: string) =>
+    post('/admin/password-reset/confirm', { token, password }),
   addCompany: (body: { legalName: string; orgNumber: string; restaurantName: string }) =>
     post<{ tenantId: string }>('/admin/companies', body),
   overview: (date?: string) => get<Overview>(`/admin/overview${date ? `?date=${date}` : ''}`),
@@ -218,6 +227,12 @@ export const api = {
     post(`${t(tenantId)}/restaurants/${restaurantId}/registers`, { designation }),
   retireRegister: (tenantId: string, registerId: string) =>
     post(`${t(tenantId)}/registers/${registerId}/retire`),
+  pairingCode: (tenantId: string, registerId: string) =>
+    post<{ code: string; expiresAt: string }>(
+      `${t(tenantId)}/registers/${registerId}/pairing-code`,
+    ),
+  revokeDevice: (tenantId: string, deviceId: string) =>
+    post(`${t(tenantId)}/devices/${deviceId}/revoke`),
 
   menu: (tenantId: string, restaurantId: string) =>
     get<{ groups: MenuGroup[]; articles: Article[] }>(

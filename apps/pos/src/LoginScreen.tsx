@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { getLoginInfo, login, type LoginInfo, type Staff } from './api';
+import { login, type DeviceInfo, type Staff } from './api';
 
 interface Props {
+  device: DeviceInfo;
   onLoggedIn: (staff: Staff) => void;
 }
 
@@ -17,19 +18,11 @@ const MAX_PIN = 8;
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 /** Pick your name, then enter your PIN on the keypad (or the keyboard). */
-export function LoginScreen({ onLoggedIn }: Props) {
-  const [info, setInfo] = useState<LoginInfo | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+export function LoginScreen({ device: info, onLoggedIn }: Props) {
   const [selected, setSelected] = useState<Staff | null>(null);
   const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    getLoginInfo()
-      .then(setInfo)
-      .catch((err: unknown) => setLoadError(message(err)));
-  }, []);
 
   function press(key: string) {
     setError(null);
@@ -64,21 +57,18 @@ export function LoginScreen({ onLoggedIn }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  if (loadError) {
-    return (
-      <div className="center-message">
-        <h1>Kassan kunde inte startas</h1>
-        <p>{loadError}</p>
-      </div>
-    );
-  }
-  if (!info) return <div className="center-message">Laddar…</div>;
-
   return (
     <div className="login">
       <header className="login-header">
         <h1>{info.restaurant.name}</h1>
-        <p className="muted">Kassa {info.register.designation}</p>
+        <p className="muted">
+          {info.company.legalName} · Kassa {info.register.designation} · {info.device.name}
+        </p>
+        {info.company.status === 'pending' && (
+          <p className="notice">
+            Företaget väntar på godkännande. Du kan logga in och träna, men inte sälja än.
+          </p>
+        )}
       </header>
 
       {!selected ? (

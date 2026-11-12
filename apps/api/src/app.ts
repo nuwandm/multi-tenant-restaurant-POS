@@ -5,6 +5,7 @@ import type { Sql } from 'postgres';
 import { adminRoutes } from './admin/routes';
 import { authRoutes } from './auth/routes';
 import { HttpError } from './errors';
+import { ConsoleMailer, type Mailer } from './mail/mailer';
 import { menuRoutes } from './menu/routes';
 import { reportRoutes } from './reports/routes';
 import { salesRoutes } from './sales/routes';
@@ -12,9 +13,20 @@ import { salesRoutes } from './sales/routes';
 export interface AppDeps {
   sql: Sql;
   controlSystem: ControlSystem;
+  mailer: Mailer;
+  /** Base URL of the back office, used in email links. */
+  backofficeUrl: string;
 }
 
-export function buildApp(deps: AppDeps, options: FastifyServerOptions = {}) {
+export function buildApp(
+  input: Omit<AppDeps, 'mailer' | 'backofficeUrl'> & Partial<AppDeps>,
+  options: FastifyServerOptions = {},
+) {
+  const deps: AppDeps = {
+    mailer: new ConsoleMailer(),
+    backofficeUrl: process.env.BACKOFFICE_URL ?? 'http://localhost:5174',
+    ...input,
+  };
   const app = Fastify(options);
 
   app.setErrorHandler((err, req, reply) => {

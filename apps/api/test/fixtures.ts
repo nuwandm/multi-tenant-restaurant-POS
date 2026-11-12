@@ -2,7 +2,8 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { isValidOrgNumber } from '@pos/domain';
 import type { Sql, TransactionSql } from 'postgres';
 import { hashPassword, hashPin } from '../src/auth/pin';
-import { newSessionToken, type Role } from '../src/auth/session';
+import { hashPairingCode, newPairingCode } from '../src/auth/device';
+import { hashToken, newSessionToken, type Role } from '../src/auth/session';
 import { withTenant } from '../src/db/tenant';
 
 /** A random Luhn-valid org number, so test runs never collide on the unique constraint. */
@@ -79,6 +80,33 @@ export async function createStaff(
   });
 }
 
+/** Pairs a till with a register the way the back office and till do. Returns the device token. */
+export async function pairDevice(
+  sql: Sql,
+  tenantId: string,
+  registerId: string,
+  createdBy: string,
+  name = 'Test tablet',
+): Promise<string> {
+  const code = newPairingCode();
+  await withTenant(
+    sql,
+    tenantId,
+    (tx) => tx`
+      INSERT INTO pairing_codes (code_hash, tenant_id, register_id, created_by, expires_at)
+      VALUES (${hashPairingCode(code)}, ${tenantId}, ${registerId}, ${createdBy},
+              ${new Date(Date.now() + 600_000)})`,
+  );
+  const deviceToken = randomUUID() + randomUUID();
+  const [row] = await sql.begin(async (tx) => {
+    await tx`SET LOCAL ROLE pos_app`;
+    return tx<{ device_id: string }[]>`
+      SELECT * FROM app_claim_pairing_code(${hashPairingCode(code)}, ${hashToken(deviceToken)}, ${name})`;
+  });
+  if (!row) throw new Error('pairing failed');
+  return deviceToken;
+}
+
 /** A logged-in session without going through the PIN check. Returns the bearer token. */
 export async function createSession(
   sql: Sql,
@@ -93,7 +121,7 @@ export async function createSession(
     sql,
     tenantId,
     (tx) =>
-      tx`SELECT app_create_session(${tokenHash}, ${userId}, ${registerId}, ${role}, ${expiresAt})`,
+      tx`SELECT app_create_session(${tokenHash}, ${userId}, ${registerId}, ${role}, ${expiresAt}, NULL)`,
   );
   return token;
 }

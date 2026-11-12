@@ -8,6 +8,7 @@ import { newSessionToken } from '../auth/session';
 import { withTenant } from '../db/tenant';
 import { HttpError } from '../errors';
 import { ADMIN_SESSION_HOURS, requireAdmin } from './admin-session';
+import { sendVerificationEmail } from './email-routes';
 
 interface SignupBody {
   ownerName: string;
@@ -52,6 +53,7 @@ export function signupRoutes(app: FastifyInstance, deps: AppDeps) {
       const passwordHash = await hashPassword(body.password);
       const tenantId = randomUUID();
       const { token, tokenHash } = newSessionToken();
+      let ownerId = '';
 
       try {
         await withTenant(deps.sql, tenantId, async (tx) => {
@@ -59,7 +61,8 @@ export function signupRoutes(app: FastifyInstance, deps: AppDeps) {
             INSERT INTO users (email, display_name, password_hash)
             VALUES (${body.email.trim()}, ${body.ownerName.trim()}, ${passwordHash})
             RETURNING id`;
-          await createCompany(tx, tenantId, user!.id, { ...body, orgNumber });
+          ownerId = user!.id;
+          await createCompany(tx, tenantId, ownerId, { ...body, orgNumber });
           await tx`
             INSERT INTO admin_sessions (token_hash, user_id, expires_at)
             VALUES (${tokenHash}, ${user!.id}, ${new Date(Date.now() + ADMIN_SESSION_HOURS * 3_600_000)})`;
@@ -68,6 +71,7 @@ export function signupRoutes(app: FastifyInstance, deps: AppDeps) {
         throw conflictError(err);
       }
 
+      await sendVerificationEmail(deps, ownerId);
       return reply.status(201).send({ token, tenantId, status: 'pending' });
     },
   );

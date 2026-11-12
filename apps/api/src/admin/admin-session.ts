@@ -8,6 +8,7 @@ export interface AdminUser {
   userId: string;
   displayName: string;
   email: string | null;
+  emailVerified: boolean;
 }
 
 /** An admin request scoped to one company the user manages. */
@@ -43,13 +44,22 @@ export async function withUser<T>(
 async function lookupAdminSession(sql: Sql, token: string): Promise<AdminUser | null> {
   const rows = await sql.begin(async (tx) => {
     await tx`SET LOCAL ROLE pos_app`;
-    return tx<{ user_id: string; display_name: string; email: string | null }[]>`
-      SELECT s.user_id, u.display_name, u.email
+    return tx<
+      { user_id: string; display_name: string; email: string | null; email_verified: boolean }[]
+    >`
+      SELECT s.user_id, u.display_name, u.email, u.email_verified_at IS NOT NULL AS email_verified
       FROM admin_sessions s JOIN users u ON u.id = s.user_id
       WHERE s.token_hash = ${hashToken(token)} AND s.ended_at IS NULL AND s.expires_at > now()`;
   });
   const row = rows[0];
-  return row ? { userId: row.user_id, displayName: row.display_name, email: row.email } : null;
+  return row
+    ? {
+        userId: row.user_id,
+        displayName: row.display_name,
+        email: row.email,
+        emailVerified: row.email_verified,
+      }
+    : null;
 }
 
 /** preHandler: requires a back office login. */

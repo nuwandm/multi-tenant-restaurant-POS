@@ -32,6 +32,7 @@ export async function storeReceipt(
   register: LockedRegister,
   built: BuiltReceipt,
   originalReceiptId: string | null = null,
+  idempotencyKey: string | null = null,
 ): Promise<StoredReceipt> {
   const { tenantId } = staff;
   const id = randomUUID();
@@ -52,10 +53,10 @@ export async function storeReceipt(
   await tx`
     INSERT INTO receipts (id, tenant_id, register_id, kind, receipt_number, original_receipt_id,
                           cashier_user_id, total_incl_vat_ore, cash_rounding_ore, control_code,
-                          signed_at, created_at)
+                          signed_at, created_at, idempotency_key)
     VALUES (${id}, ${tenantId}, ${register.id}, ${built.kind}, ${receiptNumber}, ${originalReceiptId},
             ${staff.userId}, ${built.totalOre}, ${built.cashRoundingOre}, ${signed.controlCode},
-            ${signed.signedAt}, ${createdAt})`;
+            ${signed.signedAt}, ${createdAt}, ${idempotencyKey})`;
   await tx`
     INSERT INTO receipt_lines ${tx(
       built.lines.map((l) => ({

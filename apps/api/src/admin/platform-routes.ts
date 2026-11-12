@@ -44,6 +44,8 @@ export function platformRoutes(app: FastifyInstance, deps: AppDeps) {
             status_changed_at: Date | null;
             owner_name: string | null;
             owner_email: string | null;
+            owner_email_verified: boolean;
+            devices: number;
             restaurants: number;
             registers: number;
             active_registers: number;
@@ -60,7 +62,10 @@ export function platformRoutes(app: FastifyInstance, deps: AppDeps) {
       status: r.status,
       createdAt: r.created_at,
       statusChangedAt: r.status_changed_at,
-      owner: r.owner_name ? { name: r.owner_name, email: r.owner_email } : null,
+      owner: r.owner_name
+        ? { name: r.owner_name, email: r.owner_email, emailVerified: r.owner_email_verified }
+        : null,
+      devices: r.devices,
       restaurants: r.restaurants,
       registers: r.registers,
       activeRegisters: r.active_registers,
