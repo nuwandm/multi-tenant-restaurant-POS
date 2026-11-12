@@ -1,5 +1,28 @@
 /** Swedish UI text, keyed by the English text in the code. See i18n.tsx. */
 export const sv: Record<string, string> = {
+  'Something went wrong': 'Något gick fel',
+  'The page hit an unexpected error. Reloading usually fixes it.':
+    'Sidan fick ett oväntat fel. Att ladda om brukar lösa det.',
+  Reload: 'Ladda om',
+  'A Z report cannot be undone.': 'En Z-rapport kan inte ångras.',
+  'Choose how many of each item to return.': 'Välj hur många av varje vara som ska returneras.',
+  'Close the day': 'Stäng dagen',
+  'Connect this tablet or computer to one of your registers. You only do this once.':
+    'Koppla den här surfplattan eller datorn till en av dina kassor. Det gör du bara en gång.',
+  'Copy printed': 'Kopia utskriven',
+  'Dark mode': 'Mörkt läge',
+  'Enter your PIN': 'Ange din PIN-kod',
+  'Give back {amount} in change': 'Ge tillbaka {amount} i växel',
+  'Light mode': 'Ljust läge',
+  Offline: 'Offline',
+  Online: 'Online',
+  'Payment completed': 'Betalning klar',
+  'Practice without real sales': 'Öva utan riktiga försäljningar',
+  Reports: 'Rapporter',
+  'Return completed': 'Retur klar',
+  'Rounded from {amount}': 'Avrundat från {amount}',
+  'Sales so far today': 'Försäljningen hittills idag',
+  'Training only until the company is approved': 'Endast träning tills företaget är godkänt',
   '(returned {count})': '(returnerat {count})',
   '({count} left)': '({count} kvar)',
   'Add one {name}': 'Lägg till en {name}',

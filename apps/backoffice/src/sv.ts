@@ -1,5 +1,85 @@
 /** Swedish UI text, keyed by the English text in the code. See i18n.tsx. */
 export const sv: Record<string, string> = {
+  'The page hit an unexpected error. Reloading usually fixes it.':
+    'Sidan fick ett oväntat fel. Att ladda om brukar lösa det.',
+  Reload: 'Ladda om',
+  'Restaurant point of sale': 'Kassasystem för restauranger',
+  '4–8 digits. A new PIN also unlocks a locked PIN.':
+    '4–8 siffror. En ny PIN-kod låser också upp en låst PIN.',
+  'Add a group such as Starters, then add the dishes in it.':
+    'Lägg till en grupp, till exempel Förrätter, och sedan rätterna i den.',
+  'Add one to start selling here.': 'Lägg till en för att börja sälja här.',
+  'Anyone logged in on it is logged out at once.': 'Den som är inloggad där loggas ut direkt.',
+  'At least 10 characters': 'Minst 10 tecken',
+  'Back office': 'Back office',
+  'Built for Swedish rules': 'Byggt för svenska regler',
+  'Company registered. It is waiting for approval.':
+    'Företaget är registrerat och väntar på godkännande.',
+  'Confirm your email address': 'Bekräfta din e-postadress',
+  Copied: 'Kopierad',
+  Copy: 'Kopiera',
+  'Create account': 'Skapa konto',
+  'Created a pairing code': 'Skapade en kopplingskod',
+  'Dark mode': 'Mörkt läge',
+  Day: 'Dag',
+  'Every branch in one place': 'Alla restauranger på ett ställe',
+  'Every change in the back office, newest first. The log cannot be edited.':
+    'Alla ändringar i back office, senaste först. Loggen kan inte ändras.',
+  'Every closed day, per register. Z reports can never be changed.':
+    'Varje stängd dag, per kassa. Z-rapporter kan aldrig ändras.',
+  'Every company on the platform. You see status and usage, never receipts.':
+    'Alla företag på plattformen. Du ser status och användning, aldrig kvitton.',
+  'Grand total': 'Grand total',
+  'It can no longer sell. Its receipts and Z reports are kept.':
+    'Kassan kan inte sälja mer. Kvitton och Z-rapporter sparas.',
+  'Its registers stop selling at once. You can reactivate it later.':
+    'Kassorna slutar sälja direkt. Du kan återaktivera företaget senare.',
+  'Know your day': 'Ha koll på dagen',
+  'Light mode': 'Ljust läge',
+  'Log in to manage your restaurants.': 'Logga in för att hantera dina restauranger.',
+  More: 'Mer',
+  'Net sales': 'Nettoförsäljning',
+  'New PIN for {name}': 'Ny PIN-kod för {name}',
+  'New PIN saved for {name}.': 'Ny PIN-kod sparad för {name}.',
+  'New password': 'Nytt lösenord',
+  'No changes yet.': 'Inga ändringar än.',
+  'No company yet': 'Inget företag än',
+  Period: 'Period',
+  'Platform admin': 'Plattformsadministratör',
+  'Prices include VAT. Changes reach the tills at once; old receipts keep their prices.':
+    'Priserna är inklusive moms. Ändringar når kassorna direkt; gamla kvitton behåller sina priser.',
+  'Register your company to set up restaurants, menus and registers.':
+    'Registrera ditt företag för att lägga upp restauranger, menyer och kassor.',
+  'Retire {name}?': 'Avregistrera {name}?',
+  'Role changed for {name}.': 'Rollen ändrad för {name}.',
+  'Run several companies and restaurants, each with its own registers and staff.':
+    'Driv flera företag och restauranger, var och en med egna kassor och egen personal.',
+  'Sales per company and restaurant for the chosen day.':
+    'Försäljning per företag och restaurang för vald dag.',
+  Saved: 'Sparat',
+  'Search name, org. no. or email': 'Sök namn, org.nr eller e-post',
+  'Signed receipts, X and Z reports and a tamper-proof journal, ready for Skatteverket.':
+    'Signerade kvitton, X- och Z-rapporter och en manipuleringssäker journal, redo för Skatteverket.',
+  'Something went wrong': 'Något gick fel',
+  'Start your menu': 'Börja på din meny',
+  'Suspend {name}?': 'Stäng av {name}?',
+  'The till and back office for restaurants in Sweden.':
+    'Kassan och back office för restauranger i Sverige.',
+  'Unpair {name}?': 'Koppla bort {name}?',
+  'Unpaired a device': 'Kopplade bort en enhet',
+  Waiting: 'Väntar',
+  'Welcome back': 'Välkommen tillbaka',
+  '{count} active staff': '{count} aktiva i personalen',
+  '{count} companies': '{count} företag',
+  '{count} registers': '{count} kassor',
+  '{name} is active.': '{name} är aktiv.',
+  '{name} is added and connected to the control system.':
+    '{name} är tillagd och ansluten till kontrollsystemet.',
+  '{name} is added.': '{name} är tillagd.',
+  '{name} is deactivated and logged out.': '{name} är inaktiverad och utloggad.',
+  '{name} is retired.': '{name} är avregistrerad.',
+  '{name} is suspended.': '{name} är avstängd.',
+  '{name} is unpaired.': '{name} är bortkopplad.',
   '(you)': '(du)',
   '+ Register another company': '+ Registrera ett till företag',
   '30 days': '30 dagar',

@@ -1,3 +1,5 @@
+import { Button, Center, Loader, Stack, Text, Title } from '@mantine/core';
+import { IconPlugConnectedX } from '@tabler/icons-react';
 import { useCallback, useEffect, useState } from 'react';
 import {
   currentStaff,
@@ -46,16 +48,25 @@ export function Root() {
     void start();
   }, [start]);
 
-  if (checking) return <div className="center-message">{t('Loading…')}</div>;
+  if (checking) {
+    return (
+      <Center h="100%">
+        <Loader color="brand" type="dots" />
+      </Center>
+    );
+  }
   if (error) {
     return (
-      <div className="center-message">
-        <h1>{t('The till could not start')}</h1>
-        <p>{t(error)}</p>
-        <button className="primary" onClick={() => void start()}>
-          {t('Try again')}
-        </button>
-      </div>
+      <Center h="100%" p="md">
+        <Stack align="center" gap="sm" maw={420} ta="center">
+          <IconPlugConnectedX size={40} stroke={1.4} color="var(--mantine-color-gray-6)" />
+          <Title order={3}>{t('The till could not start')}</Title>
+          <Text c="dimmed">{t(error)}</Text>
+          <Button mt="sm" onClick={() => void start()}>
+            {t('Try again')}
+          </Button>
+        </Stack>
+      </Center>
     );
   }
   if (!device) return <PairingScreen onPaired={() => void start()} />;
@@ -63,7 +74,7 @@ export function Root() {
   return (
     <App
       staff={staff}
-      companyStatus={device.company.status}
+      device={device}
       onLogout={() => {
         void logout().finally(() => setStaff(null));
       }}

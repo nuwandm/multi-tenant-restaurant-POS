@@ -1,0 +1,123 @@
+/* Back office layout. Shared tokens are in design.css. */
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+/* Frosted header: content scrolls softly underneath. */
+.app-header {
+  background: color-mix(in srgb, var(--app-surface) 78%, transparent);
+  backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid var(--app-line);
+}
+
+.app-navbar {
+  background: var(--app-surface-muted);
+  border-right: 1px solid var(--app-line);
+}
+
+.nav-section {
+  padding: 18px 12px 6px;
+}
+
+.app-navbar .mantine-NavLink-root {
+  padding-block: 7px;
+  color: var(--mantine-color-text);
+}
+
+.app-navbar .mantine-NavLink-root:not([data-active]) .mantine-NavLink-section {
+  color: var(--mantine-color-dimmed);
+}
+
+.app-navbar .mantine-NavLink-root[data-active] {
+  background: var(--app-surface);
+  box-shadow:
+    0 0 0 1px var(--app-line),
+    var(--mantine-shadow-xs);
+  color: var(--mantine-color-text);
+}
+
+.app-navbar .mantine-NavLink-root[data-active] .mantine-NavLink-section {
+  color: var(--mantine-color-brand-filled);
+}
+
+/* Stat cards */
+.stat-value {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Click-to-edit cells in the menu editor. */
+.inline-edit {
+  padding: 3px 8px;
+  margin: -3px -8px;
+  border-radius: var(--mantine-radius-sm);
+  border: 1px dashed transparent;
+  text-align: inherit;
+  transition: background 120ms ease;
+}
+
+.inline-edit:hover {
+  border-color: var(--app-line-strong);
+  background: var(--mantine-color-default-hover);
+}
+
+.pairing-code {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 2.5rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
+/* Sub-row inside a card for adding things. */
+.card-footer {
+  border-top: 1px solid var(--app-line);
+  background: var(--app-surface-muted);
+}
+
+/* Login: a quiet brand panel. A faint grid gives texture without imagery. */
+.auth-aside {
+  position: relative;
+  overflow: hidden;
+  color: white;
+  background:
+    radial-gradient(90% 60% at 100% 0%, rgb(255 255 255 / 0.09), transparent 60%),
+    radial-gradient(70% 50% at 0% 100%, rgb(0 0 0 / 0.25), transparent 60%),
+    linear-gradient(160deg, var(--mantine-color-brand-8), var(--mantine-color-brand-9) 60%, #0a2e22);
+}
+
+.auth-aside::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(80% 70% at 30% 40%, #000, transparent);
+  pointer-events: none;
+}
+
+.auth-aside > * {
+  position: relative;
+}
+
+.auth-aside .feature {
+  padding-top: 16px;
+  border-top: 1px solid rgb(255 255 255 / 0.12);
+}
+
+.auth-aside .feature-icon {
+  background: rgb(255 255 255 / 0.1);
+  color: white;
+  border: 1px solid rgb(255 255 255 / 0.16);
+}
+
+.auth-form {
+  background: var(--app-surface);
+}

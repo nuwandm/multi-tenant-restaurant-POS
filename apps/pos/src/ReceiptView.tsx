@@ -1,6 +1,9 @@
+import { Button, Group, Modal, Stack, Text, ThemeIcon } from '@mantine/core';
+import { IconCheck, IconPrinter } from '@tabler/icons-react';
 import type { Receipt } from './api';
 import { formatDateTime, formatKr, PAYMENT_LABELS } from './format';
 import { useT } from './i18n';
+import { ReceiptPaper } from './ReceiptPaper';
 
 interface Props {
   receipt: Receipt;
@@ -15,84 +18,113 @@ const BANNERS: Partial<Record<Receipt['kind'], string>> = {
   return: 'RETURN RECEIPT',
 };
 
-/** On-screen receipt. Field layout to be checked against SKVFS 2014:9 before printing for real. */
+/** The receipt after a sale, return or copy. Field layout to be checked against SKVFS 2014:9. */
 export function ReceiptView({ receipt, restaurantName, changeOre, onNewSale }: Props) {
   const t = useT();
   const banner = BANNERS[receipt.kind];
+  const org = receipt.seller.orgNumber.replace(/^(\d{6})/, '$1-');
 
   return (
-    <div className="overlay" role="dialog" aria-modal="true" aria-label={t('Receipt')}>
-      <div className="dialog receipt-dialog">
-        <div className="receipt">
-          {banner && <p className="receipt-banner">{t(banner)}</p>}
-          <p className="receipt-seller">{receipt.seller.legalName}</p>
-          <p>{restaurantName}</p>
-          <p>
-            {t('Org. no. {number}', {
-              number: receipt.seller.orgNumber.replace(/^(\d{6})/, '$1-'),
-            })}
-          </p>
+    <Modal opened onClose={onNewSale} withCloseButton={false} size={420} padding="lg">
+      <Stack gap="lg">
+        <Group gap="sm">
+          <ThemeIcon radius="xl" size="lg" color={receipt.kind === 'training' ? 'orange' : 'brand'}>
+            <IconCheck size={20} />
+          </ThemeIcon>
+          <div>
+            <Text fw={650}>
+              {receipt.kind === 'return'
+                ? t('Return completed')
+                : receipt.kind === 'copy'
+                  ? t('Copy printed')
+                  : t('Payment completed')}
+            </Text>
+            {changeOre > 0 && (
+              <Text fz="sm" c="dimmed">
+                {t('Give back {amount} in change', { amount: formatKr(changeOre) })}
+              </Text>
+            )}
+          </div>
+        </Group>
+
+        <ReceiptPaper>
+          {banner && <div className="stamp">{t(banner)}</div>}
+          <div className="center">
+            <strong>{receipt.seller.legalName}</strong>
+            <div>{restaurantName}</div>
+            <div>{t('Org. no. {number}', { number: org })}</div>
+          </div>
           <hr />
-          <p className="row">
+          <div className="row">
             <span>{t('Register {name}', { name: receipt.register.designation })}</span>
             <span>{t('Receipt no. {number}', { number: receipt.receiptNumber })}</span>
-          </p>
-          <p>{formatDateTime(receipt.createdAt)}</p>
-          {receipt.cashier && <p>{t('Cashier: {name}', { name: receipt.cashier.displayName })}</p>}
+          </div>
+          <div>{formatDateTime(receipt.createdAt)}</div>
+          {receipt.cashier && (
+            <div>{t('Cashier: {name}', { name: receipt.cashier.displayName })}</div>
+          )}
           <hr />
           {receipt.lines.map((l) => (
-            <p key={l.lineNo} className="row">
+            <div key={l.lineNo} className="row">
               <span>
                 {l.quantity} × {l.name}
               </span>
               <span>{formatKr(l.lineTotalOre)}</span>
-            </p>
+            </div>
           ))}
           <hr />
-          <p className="row total">
+          <div className="row" style={{ fontWeight: 700, fontSize: 15 }}>
             <span>{t('Total')}</span>
             <span>{formatKr(receipt.totalOre)}</span>
-          </p>
+          </div>
           {receipt.vatTotals.map((v) => (
-            <p key={v.vatRate} className="row small">
+            <div key={v.vatRate} className="row">
               <span>
                 {t('VAT {rate}% (net {net})', { rate: v.vatRate, net: formatKr(v.netOre) })}
               </span>
               <span>{formatKr(v.vatOre)}</span>
-            </p>
+            </div>
           ))}
           {receipt.cashRoundingOre !== 0 && (
-            <p className="row small">
+            <div className="row">
               <span>{t('Cash rounding')}</span>
               <span>{formatKr(receipt.cashRoundingOre)}</span>
-            </p>
+            </div>
           )}
           <hr />
           {receipt.payments.map((p, i) => (
-            <p key={i} className="row">
+            <div key={i} className="row">
               <span>{t(PAYMENT_LABELS[p.method])}</span>
               <span>{formatKr(p.amountOre)}</span>
-            </p>
+            </div>
           ))}
           {changeOre > 0 && (
-            <p className="row">
+            <div className="row">
               <span>{t('Change')}</span>
               <span>{formatKr(changeOre)}</span>
-            </p>
+            </div>
           )}
           <hr />
-          <p className="small">{t('Control code')}</p>
-          <p className="control-code">{receipt.controlCode}</p>
-        </div>
-        <div className="dialog-actions">
-          <button type="button" className="secondary" onClick={() => window.print()}>
+          <div className="center">
+            <div>{t('Control code')}</div>
+            <div style={{ wordBreak: 'break-all', fontWeight: 700 }}>{receipt.controlCode}</div>
+          </div>
+        </ReceiptPaper>
+
+        <Group grow>
+          <Button
+            variant="default"
+            size="md"
+            leftSection={<IconPrinter size={18} />}
+            onClick={() => window.print()}
+          >
             {t('Print')}
-          </button>
-          <button type="button" className="primary" onClick={onNewSale} autoFocus>
+          </Button>
+          <Button size="md" onClick={onNewSale} data-autofocus>
             {t('New sale')}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </Group>
+      </Stack>
+    </Modal>
   );
 }

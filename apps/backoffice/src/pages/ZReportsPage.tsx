@@ -1,60 +1,97 @@
+import { Badge, Card, Center, Stack, Table, Text, ThemeIcon } from '@mantine/core';
+import { IconFileAnalytics } from '@tabler/icons-react';
 import { api } from '../api';
 import { formatDateTime, formatKr } from '../format';
 import { useT } from '../i18n';
+import { PageHeader } from '../PageHeader';
 import { useLoad } from '../useLoad';
+import { TableSkeleton } from './TableSkeleton';
 
 export function ZReportsPage({ tenantId }: { tenantId: string }) {
   const t = useT();
   const { data, error } = useLoad(() => api.zReports(tenantId), [tenantId]);
+
   return (
-    <section>
-      <header className="page-header">
-        <h1>{t('Z reports')}</h1>
-      </header>
-      {error && <p className="error">{t(error)}</p>}
-      <div className="card">
-        <table>
-          <thead>
-            <tr>
-              <th>{t('Restaurant')}</th>
-              <th>{t('Register name')}</th>
-              <th className="num">{t('Z no.')}</th>
-              <th>Period</th>
-              <th className="num">{t('Receipts')}</th>
-              <th className="num">{t('Sales')}</th>
-              <th className="num">{t('Returns')}</th>
-              <th className="num">{t('Net')}</th>
-              <th className="num">Grand total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data?.map((z) => (
-              <tr key={z.id}>
-                <td>{z.restaurant}</td>
-                <td>{z.register}</td>
-                <td className="num">{z.zNumber}</td>
-                <td className="small">
-                  {formatDateTime(z.periodFrom)} – {formatDateTime(z.periodTo)}
-                </td>
-                <td className="num">{z.saleCount}</td>
-                <td className="num">{formatKr(z.salesTotalOre)}</td>
-                <td className="num">{formatKr(z.returnsTotalOre)}</td>
-                <td className="num">
-                  <strong>{formatKr(z.netTotalOre)}</strong>
-                </td>
-                <td className="num">{formatKr(z.grandTotalOre)}</td>
-              </tr>
-            ))}
-            {data?.length === 0 && (
-              <tr>
-                <td colSpan={9} className="muted">
-                  {t('No Z reports yet. They are taken at the till when the day is closed.')}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </section>
+    <>
+      <PageHeader
+        title={t('Z reports')}
+        description={t('Every closed day, per register. Z reports can never be changed.')}
+      />
+      {error && <Text c="red">{t(error)}</Text>}
+      <Card withBorder padding={0} radius="lg">
+        {!data && !error && <TableSkeleton />}
+        {data?.length === 0 && (
+          <Center py={64}>
+            <Stack align="center" gap="xs">
+              <ThemeIcon size={48} radius="xl" variant="light">
+                <IconFileAnalytics size={24} stroke={1.5} />
+              </ThemeIcon>
+              <Text c="dimmed">
+                {t('No Z reports yet. They are taken at the till when the day is closed.')}
+              </Text>
+            </Stack>
+          </Center>
+        )}
+        {data && data.length > 0 && (
+          <Table.ScrollContainer minWidth={820}>
+            <Table verticalSpacing="sm" horizontalSpacing="lg" highlightOnHover>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>{t('Z no.')}</Table.Th>
+                  <Table.Th>{t('Restaurant')}</Table.Th>
+                  <Table.Th>{t('Period')}</Table.Th>
+                  <Table.Th ta="right">{t('Receipts')}</Table.Th>
+                  <Table.Th ta="right">{t('Sales')}</Table.Th>
+                  <Table.Th ta="right">{t('Returns')}</Table.Th>
+                  <Table.Th ta="right">{t('Net')}</Table.Th>
+                  <Table.Th ta="right">{t('Grand total')}</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {data.map((z) => (
+                  <Table.Tr key={z.id}>
+                    <Table.Td>
+                      <Badge variant="light" radius="sm" className="tabular">
+                        Z {z.zNumber}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text fz="sm" fw={500}>
+                        {z.restaurant}
+                      </Text>
+                      <Text fz="xs" c="dimmed">
+                        {z.register}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td fz="sm" c="dimmed">
+                      {formatDateTime(z.periodFrom)} – {formatDateTime(z.periodTo)}
+                    </Table.Td>
+                    <Table.Td ta="right" className="tabular">
+                      {z.saleCount}
+                    </Table.Td>
+                    <Table.Td ta="right" className="tabular">
+                      {formatKr(z.salesTotalOre)}
+                    </Table.Td>
+                    <Table.Td
+                      ta="right"
+                      c={z.returnsTotalOre ? 'red' : undefined}
+                      className="tabular"
+                    >
+                      {formatKr(z.returnsTotalOre)}
+                    </Table.Td>
+                    <Table.Td ta="right" fw={650} className="tabular">
+                      {formatKr(z.netTotalOre)}
+                    </Table.Td>
+                    <Table.Td ta="right" c="dimmed" className="tabular">
+                      {formatKr(z.grandTotalOre)}
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        )}
+      </Card>
+    </>
   );
 }

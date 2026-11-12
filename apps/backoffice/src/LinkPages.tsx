@@ -1,5 +1,19 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import {
+  Anchor,
+  Button,
+  Loader,
+  PasswordInput,
+  Stack,
+  Text,
+  TextInput,
+  ThemeIcon,
+  Title,
+} from '@mantine/core';
+import { IconCircleCheck, IconCircleX, IconMailForward } from '@tabler/icons-react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { api } from './api';
+import { AuthLayout } from './AuthLayout';
+import { FormError } from './AuthPages';
 import { message } from './format';
 import { useT } from './i18n';
 import { useAction } from './useLoad';
@@ -15,6 +29,31 @@ function leave(onDone: () => void) {
   onDone();
 }
 
+function Result({
+  ok,
+  title,
+  text,
+  action,
+}: {
+  ok: boolean;
+  title: string;
+  text: string;
+  action: ReactNode;
+}) {
+  return (
+    <Stack gap="md" align="flex-start">
+      <ThemeIcon size={48} radius="xl" variant="light" color={ok ? 'brand' : 'red'}>
+        {ok ? <IconCircleCheck size={28} /> : <IconCircleX size={28} />}
+      </ThemeIcon>
+      <Title order={2} fz={24}>
+        {title}
+      </Title>
+      <Text c="dimmed">{text}</Text>
+      {action}
+    </Stack>
+  );
+}
+
 export function VerifyEmailPage({ token, onDone }: { token: string; onDone: () => void }) {
   const t = useT();
   const [state, setState] = useState<'working' | 'ok' | string>('working');
@@ -27,18 +66,25 @@ export function VerifyEmailPage({ token, onDone }: { token: string; onDone: () =
   }, [token]);
 
   return (
-    <div className="auth">
-      <div className="auth-card stack">
-        <p className="brand">Restaurant POS</p>
-        <h1>{t('Confirm email')}</h1>
-        {state === 'working' && <p className="muted">{t('Confirming…')}</p>}
-        {state === 'ok' && <p>{t('Thank you! Your email address is confirmed.')}</p>}
-        {state !== 'working' && state !== 'ok' && <p className="error">{t(state)}</p>}
-        <button className="primary" onClick={() => leave(onDone)}>
-          {t('Continue')}
-        </button>
-      </div>
-    </div>
+    <AuthLayout>
+      {state === 'working' ? (
+        <Stack align="center" gap="sm">
+          <Loader type="dots" />
+          <Text c="dimmed">{t('Confirming…')}</Text>
+        </Stack>
+      ) : (
+        <Result
+          ok={state === 'ok'}
+          title={t('Confirm email')}
+          text={state === 'ok' ? t('Thank you! Your email address is confirmed.') : t(state)}
+          action={
+            <Button onClick={() => leave(onDone)} fullWidth>
+              {t('Continue')}
+            </Button>
+          }
+        />
+      )}
+    </AuthLayout>
   );
 }
 
@@ -55,52 +101,49 @@ export function ResetPasswordPage({ token, onDone }: { token: string; onDone: ()
   }
 
   return (
-    <div className="auth">
-      <div className="auth-card">
-        <p className="brand">Restaurant POS</p>
-        {done ? (
-          <div className="stack">
-            <h1>{t('Your password is changed')}</h1>
-            <p>{t('Log in with your new password. You have been logged out everywhere else.')}</p>
-            <button className="primary" onClick={() => leave(onDone)}>
+    <AuthLayout>
+      {done ? (
+        <Result
+          ok
+          title={t('Your password is changed')}
+          text={t('Log in with your new password. You have been logged out everywhere else.')}
+          action={
+            <Button onClick={() => leave(onDone)} fullWidth>
               {t('Go to login')}
-            </button>
-          </div>
-        ) : (
-          <form className="stack" onSubmit={submit}>
-            <h1>{t('Choose a new password')}</h1>
-            <label className="field">
-              {t('New password (at least 10 characters)')}
-              <input
-                type="password"
-                required
-                minLength={10}
-                autoComplete="new-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </label>
-            <label className="field">
-              {t('Repeat')}
-              <input
-                type="password"
-                required
-                autoComplete="new-password"
-                value={repeat}
-                onChange={(e) => setRepeat(e.target.value)}
-              />
-            </label>
-            {repeat && repeat !== password && (
-              <p className="error">{t('The passwords do not match.')}</p>
-            )}
-            {error && <p className="error">{t(error)}</p>}
-            <button className="primary" disabled={busy || password !== repeat}>
+            </Button>
+          }
+        />
+      ) : (
+        <form onSubmit={submit}>
+          <Stack gap="md">
+            <Title order={2} fz={26}>
+              {t('Choose a new password')}
+            </Title>
+            <PasswordInput
+              label={t('New password')}
+              description={t('At least 10 characters')}
+              required
+              minLength={10}
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.currentTarget.value)}
+            />
+            <PasswordInput
+              label={t('Repeat')}
+              required
+              autoComplete="new-password"
+              value={repeat}
+              error={repeat && repeat !== password ? t('The passwords do not match.') : undefined}
+              onChange={(e) => setRepeat(e.currentTarget.value)}
+            />
+            <FormError error={error} />
+            <Button type="submit" loading={busy} disabled={password !== repeat}>
               {t('Save')}
-            </button>
-          </form>
-        )}
-      </div>
-    </div>
+            </Button>
+          </Stack>
+        </form>
+      )}
+    </AuthLayout>
   );
 }
 
@@ -115,39 +158,55 @@ export function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
     if (await run(() => api.requestPasswordReset(email))) setSent(true);
   }
 
-  return sent ? (
-    <div className="stack">
-      <h1>{t('Check your email')}</h1>
-      <p>
-        {t(
-          'If there is an account for {email}, we have sent a link to choose a new password. The link is valid for one hour.',
-          { email },
-        )}
-      </p>
-      <button className="secondary" onClick={onBack}>
-        {t('Back to login')}
-      </button>
-    </div>
-  ) : (
-    <form className="stack" onSubmit={submit}>
-      <h1>{t('Forgot password')}</h1>
-      <label className="field">
-        {t('Email')}
-        <input
+  if (sent) {
+    return (
+      <Stack gap="md" align="flex-start">
+        <ThemeIcon size={48} radius="xl" variant="light">
+          <IconMailForward size={26} />
+        </ThemeIcon>
+        <Title order={2} fz={24}>
+          {t('Check your email')}
+        </Title>
+        <Text c="dimmed">
+          {t(
+            'If there is an account for {email}, we have sent a link to choose a new password. The link is valid for one hour.',
+            { email },
+          )}
+        </Text>
+        <Button variant="default" fullWidth onClick={onBack}>
+          {t('Back to login')}
+        </Button>
+      </Stack>
+    );
+  }
+
+  return (
+    <form onSubmit={submit}>
+      <Stack gap="md">
+        <div>
+          <Title order={2} fz={26}>
+            {t('Forgot password')}
+          </Title>
+          <Text c="dimmed" fz="sm" mt={4}>
+            {t("Enter your email and we'll send you a link to choose a new password.")}
+          </Text>
+        </div>
+        <TextInput
+          label={t('Email')}
           type="email"
           required
           autoComplete="username"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => setEmail(e.currentTarget.value)}
         />
-      </label>
-      {error && <p className="error">{t(error)}</p>}
-      <button className="primary" disabled={busy}>
-        {t('Send link')}
-      </button>
-      <button type="button" className="link" onClick={onBack}>
-        {t('Back')}
-      </button>
+        <FormError error={error} />
+        <Button type="submit" loading={busy}>
+          {t('Send link')}
+        </Button>
+        <Anchor component="button" type="button" fz="sm" onClick={onBack} ta="center">
+          {t('Back to login')}
+        </Anchor>
+      </Stack>
     </form>
   );
 }

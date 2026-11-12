@@ -1,19 +1,34 @@
+import {
+  ActionIcon,
+  Alert,
+  Avatar,
+  Badge,
+  Button,
+  Group,
+  SimpleGrid,
+  Stack,
+  Text,
+  Title,
+  UnstyledButton,
+} from '@mantine/core';
+import { IconAlertCircle, IconArrowLeft, IconBackspace } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 import { login, type DeviceInfo, type Staff } from './api';
-import { LanguageToggle, useT } from './i18n';
+import { useT } from './i18n';
+import { StartLayout } from './StartLayout';
+import { avatarColor, initials } from './people';
 
 interface Props {
   device: DeviceInfo;
   onLoggedIn: (staff: Staff) => void;
 }
 
-const ROLE_LABELS: Record<Staff['role'], string> = {
+export const ROLE_LABELS: Record<Staff['role'], string> = {
   owner: 'Owner',
   manager: 'Manager',
   cashier: 'Cashier',
 };
 
-const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'];
 const MAX_PIN = 8;
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -28,8 +43,8 @@ export function LoginScreen({ device: info, onLoggedIn }: Props) {
 
   function press(key: string) {
     setError(null);
-    if (key === 'C') setPin('');
-    else if (key === '⌫') setPin((p) => p.slice(0, -1));
+    if (key === 'clear') setPin('');
+    else if (key === 'back') setPin((p) => p.slice(0, -1));
     else setPin((p) => (p.length < MAX_PIN ? p + key : p));
   }
 
@@ -51,7 +66,7 @@ export function LoginScreen({ device: info, onLoggedIn }: Props) {
     if (!selected) return;
     const onKey = (e: KeyboardEvent) => {
       if (/^\d$/.test(e.key)) press(e.key);
-      else if (e.key === 'Backspace') press('⌫');
+      else if (e.key === 'Backspace') press('back');
       else if (e.key === 'Enter') void submit();
       else if (e.key === 'Escape') setSelected(null);
     };
@@ -59,87 +74,144 @@ export function LoginScreen({ device: info, onLoggedIn }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  return (
-    <div className="login">
-      <header className="login-header">
-        <LanguageToggle />
-        <h1>{info.restaurant.name}</h1>
-        <p className="muted">
-          {info.company.legalName} · {t('Register {name}', { name: info.register.designation })} ·{' '}
-          {info.device.name}
-        </p>
-        {info.company.status === 'pending' && (
-          <p className="notice">
-            {t('The company is waiting for approval. You can log in and train, but not sell yet.')}
-          </p>
-        )}
-      </header>
+  const key = (label: string, value = label) => (
+    <Button
+      key={value}
+      variant="default"
+      size="xl"
+      h={64}
+      fz={24}
+      fw={500}
+      onClick={() => press(value)}
+    >
+      {label}
+    </Button>
+  );
 
-      {!selected ? (
-        <>
-          <h2>{t('Who are you?')}</h2>
-          {info.staff.length === 0 && (
-            <p className="muted">{t('No staff with a PIN. Add staff in the back office.')}</p>
-          )}
-          <div className="staff-grid">
-            {info.staff.map((s) => (
-              <button
-                key={s.userId}
-                type="button"
-                className="staff-tile"
-                onClick={() => {
-                  setSelected(s);
-                  setPin('');
-                  setError(null);
-                }}
-              >
-                <span className="avatar" aria-hidden="true">
-                  {s.displayName.slice(0, 1)}
-                </span>
-                <span className="staff-name">{s.displayName}</span>
-                <span className="muted small">{t(ROLE_LABELS[s.role])}</span>
-              </button>
-            ))}
-          </div>
-        </>
-      ) : (
-        <div className="pin-panel">
-          <button type="button" className="link" onClick={() => setSelected(null)}>
-            {t('← Change person')}
-          </button>
-          <h2>{t('Hi {name}, enter your PIN', { name: selected.displayName })}</h2>
-          <div className="pin-dots" aria-label={t('{count} digits entered', { count: pin.length })}>
-            {Array.from({ length: Math.max(4, pin.length) }, (_, i) => (
-              <span key={i} className={i < pin.length ? 'filled' : ''} />
-            ))}
-          </div>
-          {error && (
-            <p className="error" role="alert">
-              {t(error)}
-            </p>
-          )}
-          <div className="keypad">
-            {KEYS.map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => press(k)}
-                aria-label={k === '⌫' ? t('Delete') : k === 'C' ? t('Clear') : k}
-              >
-                {k}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            className="primary full"
-            disabled={pin.length < 4 || busy}
-            onClick={submit}
-          >
-            {busy ? t('Logging in…') : t('Log in')}
-          </button>
+  return (
+    <StartLayout width={selected ? 400 : 640}>
+      <Stack gap="lg">
+        <div>
+          <Text fz="xs" fw={600} tt="uppercase" c="dimmed" lts={0.6}>
+            {info.company.legalName}
+          </Text>
+          <Title order={2} fz={26}>
+            {info.restaurant.name}
+          </Title>
+          <Group gap={6} mt={6}>
+            <Badge variant="light" radius="sm">
+              {t('Register {name}', { name: info.register.designation })}
+            </Badge>
+            <Badge variant="default" radius="sm">
+              {info.device.name}
+            </Badge>
+          </Group>
         </div>
-      )}
-    </div>
+
+        {info.company.status === 'pending' && (
+          <Alert color="orange" variant="light" icon={<IconAlertCircle size={18} />}>
+            {t('The company is waiting for approval. You can log in and train, but not sell yet.')}
+          </Alert>
+        )}
+
+        {!selected ? (
+          <>
+            <Text fw={600}>{t('Who are you?')}</Text>
+            {info.staff.length === 0 ? (
+              <Text c="dimmed">{t('No staff with a PIN. Add staff in the back office.')}</Text>
+            ) : (
+              <SimpleGrid cols={{ base: 2, xs: 3, sm: 4 }} spacing="sm">
+                {info.staff.map((s) => (
+                  <UnstyledButton
+                    key={s.userId}
+                    className="staff-tile"
+                    onClick={() => {
+                      setSelected(s);
+                      setPin('');
+                      setError(null);
+                    }}
+                  >
+                    <Avatar
+                      size={52}
+                      radius="xl"
+                      color={avatarColor(s.displayName)}
+                      variant="light"
+                    >
+                      {initials(s.displayName)}
+                    </Avatar>
+                    <Text fw={600} ta="center" lineClamp={1}>
+                      {s.displayName}
+                    </Text>
+                    <Text fz="xs" c="dimmed">
+                      {t(ROLE_LABELS[s.role])}
+                    </Text>
+                  </UnstyledButton>
+                ))}
+              </SimpleGrid>
+            )}
+          </>
+        ) : (
+          <Stack gap="md">
+            <Group gap="sm">
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="lg"
+                onClick={() => setSelected(null)}
+                aria-label={t('← Change person')}
+              >
+                <IconArrowLeft size={20} />
+              </ActionIcon>
+              <Avatar radius="xl" color={avatarColor(selected.displayName)} variant="light">
+                {initials(selected.displayName)}
+              </Avatar>
+              <div>
+                <Text fw={600}>{selected.displayName}</Text>
+                <Text fz="sm" c="dimmed">
+                  {t('Enter your PIN')}
+                </Text>
+              </div>
+            </Group>
+
+            <div
+              className="pin-dots"
+              aria-label={t('{count} digits entered', { count: pin.length })}
+            >
+              {Array.from({ length: Math.max(4, pin.length) }, (_, i) => (
+                <span key={i} data-filled={i < pin.length} />
+              ))}
+            </div>
+
+            {error && (
+              <Alert color="red" variant="light" py="xs">
+                {t(error)}
+              </Alert>
+            )}
+
+            <SimpleGrid cols={3} spacing="xs">
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((k) => key(k))}
+              <Button variant="subtle" color="gray" size="xl" h={64} onClick={() => press('clear')}>
+                {t('Clear')}
+              </Button>
+              {key('0')}
+              <Button
+                variant="subtle"
+                color="gray"
+                size="xl"
+                h={64}
+                onClick={() => press('back')}
+                aria-label={t('Delete')}
+              >
+                <IconBackspace size={24} stroke={1.6} />
+              </Button>
+            </SimpleGrid>
+
+            <Button size="lg" loading={busy} disabled={pin.length < 4} onClick={submit}>
+              {t('Log in')}
+            </Button>
+          </Stack>
+        )}
+      </Stack>
+    </StartLayout>
   );
 }

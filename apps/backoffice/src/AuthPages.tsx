@@ -1,6 +1,21 @@
+import {
+  Alert,
+  Anchor,
+  Button,
+  Divider,
+  Group,
+  PasswordInput,
+  SimpleGrid,
+  Stack,
+  Text,
+  TextInput,
+  Title,
+} from '@mantine/core';
+import { IconAlertCircle } from '@tabler/icons-react';
 import { useState, type FormEvent } from 'react';
 import { api } from './api';
-import { LanguageToggle, useT } from './i18n';
+import { AuthLayout } from './AuthLayout';
+import { useT } from './i18n';
 import { ForgotPasswordForm } from './LinkPages';
 import { useAction } from './useLoad';
 
@@ -11,25 +26,27 @@ interface Props {
 export function AuthPages({ onLoggedIn }: Props) {
   const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login');
   return (
-    <div className="auth">
-      <div className="auth-card">
-        <div className="auth-top">
-          <p className="brand">Restaurant POS</p>
-          <LanguageToggle />
-        </div>
-        {mode === 'login' && (
-          <LoginForm
-            onLoggedIn={onLoggedIn}
-            onSignup={() => setMode('signup')}
-            onForgot={() => setMode('forgot')}
-          />
-        )}
-        {mode === 'signup' && (
-          <SignupForm onLoggedIn={onLoggedIn} onLogin={() => setMode('login')} />
-        )}
-        {mode === 'forgot' && <ForgotPasswordForm onBack={() => setMode('login')} />}
-      </div>
-    </div>
+    <AuthLayout>
+      {mode === 'login' && (
+        <LoginForm
+          onLoggedIn={onLoggedIn}
+          onSignup={() => setMode('signup')}
+          onForgot={() => setMode('forgot')}
+        />
+      )}
+      {mode === 'signup' && <SignupForm onLoggedIn={onLoggedIn} onLogin={() => setMode('login')} />}
+      {mode === 'forgot' && <ForgotPasswordForm onBack={() => setMode('login')} />}
+    </AuthLayout>
+  );
+}
+
+export function FormError({ error }: { error: string | null }) {
+  const t = useT();
+  if (!error) return null;
+  return (
+    <Alert color="red" variant="light" icon={<IconAlertCircle size={18} />}>
+      {t(error)}
+    </Alert>
   );
 }
 
@@ -49,43 +66,47 @@ function LoginForm({
   }
 
   return (
-    <form onSubmit={submit} className="stack">
-      <h1>{t('Log in')}</h1>
-      <label className="field">
-        {t('Email')}
-        <input
+    <form onSubmit={submit}>
+      <Stack gap="md">
+        <div>
+          <Title order={2} fz={26} lts={-0.3}>
+            {t('Welcome back')}
+          </Title>
+          <Text c="dimmed" fz="sm" mt={4}>
+            {t('Log in to manage your restaurants.')}
+          </Text>
+        </div>
+        <TextInput
+          label={t('Email')}
           type="email"
           autoComplete="username"
           required
+          size="md"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => setEmail(e.currentTarget.value)}
         />
-      </label>
-      <label className="field">
-        {t('Password')}
-        <input
-          type="password"
+        <PasswordInput
+          label={t('Password')}
           autoComplete="current-password"
           required
+          size="md"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) => setPassword(e.currentTarget.value)}
         />
-      </label>
-      {error && <p className="error">{t(error)}</p>}
-      <button className="primary" disabled={busy}>
-        {busy ? t('Logging in…') : t('Log in')}
-      </button>
-      <p className="muted center">
-        <button type="button" className="link" onClick={onForgot}>
-          {t('Forgot password?')}
-        </button>
-      </p>
-      <p className="muted center">
-        {t('New restaurant?')}{' '}
-        <button type="button" className="link" onClick={onSignup}>
+        <Group justify="flex-end" mt={-6}>
+          <Anchor component="button" type="button" fz="sm" onClick={onForgot}>
+            {t('Forgot password?')}
+          </Anchor>
+        </Group>
+        <FormError error={error} />
+        <Button type="submit" size="md" loading={busy}>
+          {t('Log in')}
+        </Button>
+        <Divider label={t('New restaurant?')} labelPosition="center" />
+        <Button variant="default" size="md" onClick={onSignup}>
           {t('Register your company')}
-        </button>
-      </p>
+        </Button>
+      </Stack>
     </form>
   );
 }
@@ -102,8 +123,11 @@ function SignupForm({ onLoggedIn, onLogin }: Props & { onLogin: () => void }) {
     restaurantAddress: '',
   });
   const { busy, error, run } = useAction();
-  const set = (key: keyof typeof form) => (e: { target: { value: string } }) =>
-    setForm((f) => ({ ...f, [key]: e.target.value }));
+  // Read the value now: React clears currentTarget before a state updater runs.
+  const set = (key: keyof typeof form) => (e: { currentTarget: { value: string } }) => {
+    const value = e.currentTarget.value;
+    setForm((f) => ({ ...f, [key]: value }));
+  };
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -114,83 +138,81 @@ function SignupForm({ onLoggedIn, onLogin }: Props & { onLogin: () => void }) {
   }
 
   return (
-    <form onSubmit={submit} className="stack">
-      <h1>{t('Register your company')}</h1>
-      <p className="muted">
-        {t(
-          'You can set up menu, staff and registers right away. The registers can sell once we have approved the company.',
-        )}
-      </p>
-      <fieldset>
-        <legend>{t('You')}</legend>
-        <label className="field">
-          {t('Name')}
-          <input required value={form.ownerName} onChange={set('ownerName')} />
-        </label>
-        <label className="field">
-          {t('Email')}
-          <input
-            type="email"
+    <form onSubmit={submit}>
+      <Stack gap="md">
+        <div>
+          <Title order={2} fz={26} lts={-0.3}>
+            {t('Register your company')}
+          </Title>
+          <Text c="dimmed" fz="sm" mt={4}>
+            {t(
+              'You can set up menu, staff and registers right away. The registers can sell once we have approved the company.',
+            )}
+          </Text>
+        </div>
+
+        <Divider label={t('You')} labelPosition="left" />
+        <TextInput label={t('Name')} required value={form.ownerName} onChange={set('ownerName')} />
+        <TextInput
+          label={t('Email')}
+          type="email"
+          required
+          autoComplete="username"
+          value={form.email}
+          onChange={set('email')}
+        />
+        <PasswordInput
+          label={t('Password')}
+          description={t('At least 10 characters')}
+          required
+          minLength={10}
+          autoComplete="new-password"
+          value={form.password}
+          onChange={set('password')}
+        />
+
+        <Divider label={t('Company')} labelPosition="left" mt="xs" />
+        <TextInput
+          label={t('Company name')}
+          required
+          placeholder={t('Example Restaurant AB')}
+          value={form.legalName}
+          onChange={set('legalName')}
+        />
+        <TextInput
+          label={t('Organisation number')}
+          required
+          placeholder="556677-8899"
+          value={form.orgNumber}
+          onChange={set('orgNumber')}
+        />
+
+        <Divider label={t('First restaurant')} labelPosition="left" mt="xs" />
+        <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm">
+          <TextInput
+            label={t('Name')}
             required
-            autoComplete="username"
-            value={form.email}
-            onChange={set('email')}
+            value={form.restaurantName}
+            onChange={set('restaurantName')}
           />
-        </label>
-        <label className="field">
-          {t('Password (at least 10 characters)')}
-          <input
-            type="password"
-            required
-            minLength={10}
-            autoComplete="new-password"
-            value={form.password}
-            onChange={set('password')}
+          <TextInput
+            label={t('Address (optional)')}
+            value={form.restaurantAddress}
+            onChange={set('restaurantAddress')}
           />
-        </label>
-      </fieldset>
-      <fieldset>
-        <legend>{t('Company')}</legend>
-        <label className="field">
-          {t('Company name')}
-          <input
-            required
-            placeholder={t('Example Restaurant AB')}
-            value={form.legalName}
-            onChange={set('legalName')}
-          />
-        </label>
-        <label className="field">
-          {t('Organisation number')}
-          <input
-            required
-            placeholder="556677-8899"
-            value={form.orgNumber}
-            onChange={set('orgNumber')}
-          />
-        </label>
-      </fieldset>
-      <fieldset>
-        <legend>{t('First restaurant')}</legend>
-        <label className="field">
-          {t('Name')}
-          <input required value={form.restaurantName} onChange={set('restaurantName')} />
-        </label>
-        <label className="field">
-          {t('Address (optional)')}
-          <input value={form.restaurantAddress} onChange={set('restaurantAddress')} />
-        </label>
-      </fieldset>
-      {error && <p className="error">{t(error)}</p>}
-      <button className="primary" disabled={busy}>
-        {busy ? t('Registering…') : t('Register')}
-      </button>
-      <p className="muted center">
-        {t('Already have an account?')}{' '}
-        <button type="button" className="link" onClick={onLogin}>
-          {t('Log in')}
-        </button>
-      </p>
+        </SimpleGrid>
+
+        <FormError error={error} />
+        <Button type="submit" size="md" loading={busy}>
+          {t('Create account')}
+        </Button>
+        <Text fz="sm" c="dimmed" ta="center">
+          {t('Already have an account?')}{' '}
+          <Anchor component="button" type="button" onClick={onLogin}>
+            {t('Log in')}
+          </Anchor>
+        </Text>
+      </Stack>
     </form>
   );
 }

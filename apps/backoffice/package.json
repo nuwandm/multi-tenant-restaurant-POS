@@ -11,7 +11,13 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@fontsource-variable/geist": "catalog:",
+    "@fontsource-variable/geist-mono": "catalog:",
+    "@mantine/core": "catalog:",
+    "@mantine/hooks": "catalog:",
+    "@mantine/notifications": "catalog:",
     "@pos/domain": "workspace:*",
+    "@tabler/icons-react": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:"
   },

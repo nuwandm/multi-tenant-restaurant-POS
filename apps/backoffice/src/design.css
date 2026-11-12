@@ -1,0 +1,100 @@
+/*
+ * Design tokens on top of Mantine, shared by the till and the back office (identical in both).
+ * Import after Mantine's stylesheet so these win.
+ */
+
+:root[data-mantine-color-scheme='light'] {
+  --app-bg: #f7f7f8;
+  --app-surface: #ffffff;
+  --app-surface-muted: #fbfbfc;
+  --app-line: #e9e9ec;
+  --app-line-strong: #dcdce1;
+  --mantine-color-default-border: #e3e3e7;
+  --mantine-color-body: #ffffff;
+  --mantine-color-text: #18181b;
+  --mantine-color-dimmed: #6e6e78;
+}
+
+:root[data-mantine-color-scheme='dark'] {
+  --app-bg: #0b0b0d;
+  --app-surface: #131316;
+  --app-surface-muted: #17171b;
+  --app-line: #222227;
+  --app-line-strong: #2d2d33;
+  --mantine-color-default-border: #26262c;
+  --mantine-color-body: #131316;
+  --mantine-color-text: #ececef;
+  --mantine-color-dimmed: #8d8d97;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background: var(--app-bg);
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+h1,
+h2,
+h3,
+h4,
+.mantine-Title-root {
+  letter-spacing: -0.022em;
+}
+
+::selection {
+  background: var(--mantine-color-brand-2);
+  color: var(--mantine-color-brand-9);
+}
+
+:focus-visible {
+  outline: 2px solid var(--mantine-color-brand-5);
+  outline-offset: 2px;
+}
+
+/* Figures line up in columns and never jump while they change. */
+.tabular,
+.mantine-Table-td {
+  font-variant-numeric: tabular-nums;
+}
+
+.mono {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.85em;
+  letter-spacing: -0.01em;
+}
+
+/* Small uppercase label above a value. */
+.eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mantine-color-dimmed);
+}
+
+/* Cards use our surface colour in both schemes. */
+.mantine-Card-root,
+.mantine-Paper-root[data-with-border] {
+  background: var(--app-surface);
+  border-color: var(--app-line);
+}
+
+.mantine-Table-thead {
+  background: var(--app-surface-muted);
+}
+
+.mantine-Table-tr,
+.mantine-Table-thead .mantine-Table-tr {
+  border-color: var(--app-line);
+}
+
+/* Thin, quiet scrollbars. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--app-line-strong) transparent;
+}

@@ -1,9 +1,28 @@
+import {
+  Badge,
+  Button,
+  Card,
+  Center,
+  Group,
+  Select,
+  Stack,
+  Switch,
+  Table,
+  Text,
+  TextInput,
+  ThemeIcon,
+  UnstyledButton,
+} from '@mantine/core';
+import { IconPlus, IconToolsKitchen2 } from '@tabler/icons-react';
 import type { VatRate } from '@pos/domain';
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, type Article, type MenuGroup } from '../api';
 import { formatKr, parseKr } from '../format';
 import { useT } from '../i18n';
+import { notifyOk } from '../notify';
+import { PageHeader } from '../PageHeader';
 import { useAction, useLoad } from '../useLoad';
+import { TableSkeleton } from './TableSkeleton';
 
 const VAT_OPTIONS: { rate: VatRate; label: string }[] = [
   { rate: 12, label: '12% (food)' },
@@ -24,24 +43,31 @@ export function MenuPage({ tenantId }: { tenantId: string }) {
   }, [restaurants.data, restaurantId]);
 
   return (
-    <section>
-      <header className="page-header">
-        <h1>{t('Menu')}</h1>
-        {restaurants.data && restaurants.data.restaurants.length > 1 && (
-          <select value={restaurantId ?? ''} onChange={(e) => setRestaurantId(e.target.value)}>
-            {restaurants.data.restaurants.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
+    <>
+      <PageHeader
+        title={t('Menu')}
+        description={t(
+          'Prices include VAT. Changes reach the tills at once; old receipts keep their prices.',
         )}
-      </header>
-      {restaurants.error && <p className="error">{t(restaurants.error)}</p>}
+        actions={
+          restaurants.data &&
+          restaurants.data.restaurants.length > 1 && (
+            <Select
+              aria-label={t('Restaurant')}
+              allowDeselect={false}
+              value={restaurantId}
+              onChange={setRestaurantId}
+              data={restaurants.data.restaurants.map((r) => ({ value: r.id, label: r.name }))}
+              w={240}
+            />
+          )
+        }
+      />
+      {restaurants.error && <Text c="red">{t(restaurants.error)}</Text>}
       {restaurantId && (
         <MenuEditor key={restaurantId} tenantId={tenantId} restaurantId={restaurantId} />
       )}
-    </section>
+    </>
   );
 }
 
@@ -51,7 +77,7 @@ function MenuEditor({ tenantId, restaurantId }: { tenantId: string; restaurantId
     () => api.menu(tenantId, restaurantId),
     [tenantId, restaurantId],
   );
-  const action = useAction();
+  const action = useAction({ toast: true });
   const [groupName, setGroupName] = useState('');
 
   async function addGroup(e: FormEvent) {
@@ -60,17 +86,27 @@ function MenuEditor({ tenantId, restaurantId }: { tenantId: string; restaurantId
     if (
       await action.run(() => api.addGroup(tenantId, restaurantId, { name: groupName, sortOrder }))
     ) {
+      notifyOk(t('{name} is added.', { name: groupName }));
       setGroupName('');
       reload();
     }
   }
 
   const save = async (fn: () => Promise<unknown>) => {
-    if (await action.run(fn)) reload();
+    if (await action.run(fn)) {
+      notifyOk(t('Saved'));
+      reload();
+    }
   };
 
   if (!data) {
-    return error ? <p className="error">{t(error)}</p> : <p className="muted">{t('Loading…')}</p>;
+    return error ? (
+      <Text c="red">{t(error)}</Text>
+    ) : (
+      <Card withBorder radius="lg" padding={0}>
+        <TableSkeleton />
+      </Card>
+    );
   }
 
   const sections: { group: MenuGroup | null; articles: Article[] }[] = [
@@ -81,85 +117,157 @@ function MenuEditor({ tenantId, restaurantId }: { tenantId: string; restaurantId
     { group: null, articles: data.articles.filter((a) => a.menuGroupId === null) },
   ];
 
+  if (data.articles.length === 0 && data.groups.length === 0) {
+    return (
+      <Card withBorder radius="lg" p={48}>
+        <Center>
+          <Stack align="center" gap="sm" maw={420} ta="center">
+            <ThemeIcon size={56} radius="xl" variant="light">
+              <IconToolsKitchen2 size={28} stroke={1.5} />
+            </ThemeIcon>
+            <Text fw={600} fz="lg">
+              {t('Start your menu')}
+            </Text>
+            <Text c="dimmed">{t('Add a group such as Starters, then add the dishes in it.')}</Text>
+            <NewGroupForm
+              value={groupName}
+              onChange={setGroupName}
+              onSubmit={addGroup}
+              busy={action.busy}
+            />
+          </Stack>
+        </Center>
+      </Card>
+    );
+  }
+
   return (
-    <>
-      {action.error && <p className="error">{t(action.error)}</p>}
-      {sections.map(({ group, articles }) => (
-        <div
-          key={group?.id ?? 'none'}
-          className={`card ${group && !group.active ? 'inactive' : ''}`}
-        >
-          <div className="card-header">
-            {group ? (
-              <InlineText
-                value={group.name}
-                onSave={(name) => save(() => api.updateGroup(tenantId, group.id, { name }))}
-                className="h2"
-              />
-            ) : (
-              <h2 className="muted">{t('No group')}</h2>
-            )}
-            {group && (
-              <label className="toggle small">
-                <input
-                  type="checkbox"
+    <Stack gap="lg">
+      {sections
+        .filter((s) => s.group || s.articles.length > 0)
+        .map(({ group, articles }) => (
+          <Card
+            key={group?.id ?? 'none'}
+            withBorder
+            radius="lg"
+            padding={0}
+            opacity={group && !group.active ? 0.6 : 1}
+          >
+            <Group justify="space-between" p="lg" pb="sm">
+              <Group gap="sm">
+                {group ? (
+                  <InlineText
+                    value={group.name}
+                    fw={650}
+                    fz="lg"
+                    onSave={(name) => save(() => api.updateGroup(tenantId, group.id, { name }))}
+                  />
+                ) : (
+                  <Text fw={650} fz="lg" c="dimmed">
+                    {t('No group')}
+                  </Text>
+                )}
+                <Badge variant="default" radius="sm">
+                  {articles.length}
+                </Badge>
+              </Group>
+              {group && (
+                <Switch
+                  label={t('Shown at the till')}
+                  labelPosition="left"
                   checked={group.active}
                   onChange={(e) =>
-                    save(() => api.updateGroup(tenantId, group.id, { active: e.target.checked }))
+                    save(() =>
+                      api.updateGroup(tenantId, group.id, { active: e.currentTarget.checked }),
+                    )
                   }
                 />
-                {t('Shown at the till')}
-              </label>
-            )}
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>{t('Item')}</th>
-                <th className="num">{t('Price')}</th>
-                <th>{t('VAT')}</th>
-                <th>{t('Group')}</th>
-                <th>{t('At the till')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {articles.map((a) => (
-                <ArticleRow
-                  key={a.id}
-                  article={a}
-                  groups={data.groups}
-                  tenantId={tenantId}
-                  save={save}
-                />
-              ))}
-              {articles.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="muted">
-                    {t('No items.')}
-                  </td>
-                </tr>
               )}
-            </tbody>
-          </table>
-          <NewArticleForm
-            groupId={group?.id ?? null}
-            onAdd={(body) => save(() => api.addArticle(tenantId, restaurantId, body))}
-          />
-        </div>
-      ))}
-      <form className="card inline-form" onSubmit={addGroup}>
-        <strong>{t('New group')}</strong>
-        <input
+            </Group>
+
+            <Table.ScrollContainer minWidth={680}>
+              <Table verticalSpacing="xs" horizontalSpacing="lg" highlightOnHover>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>{t('Item')}</Table.Th>
+                    <Table.Th ta="right" w={130}>
+                      {t('Price')}
+                    </Table.Th>
+                    <Table.Th w={160}>{t('VAT')}</Table.Th>
+                    <Table.Th w={180}>{t('Group')}</Table.Th>
+                    <Table.Th w={110} ta="center">
+                      {t('At the till')}
+                    </Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {articles.map((a) => (
+                    <ArticleRow
+                      key={a.id}
+                      article={a}
+                      groups={data.groups}
+                      tenantId={tenantId}
+                      save={save}
+                    />
+                  ))}
+                  {articles.length === 0 && (
+                    <Table.Tr>
+                      <Table.Td colSpan={5}>
+                        <Text fz="sm" c="dimmed">
+                          {t('No items.')}
+                        </Text>
+                      </Table.Td>
+                    </Table.Tr>
+                  )}
+                </Table.Tbody>
+              </Table>
+            </Table.ScrollContainer>
+            <NewArticleForm
+              groupId={group?.id ?? null}
+              onAdd={(body) => save(() => api.addArticle(tenantId, restaurantId, body))}
+            />
+          </Card>
+        ))}
+
+      <Card withBorder radius="lg" p="lg" style={{ borderStyle: 'dashed' }}>
+        <NewGroupForm
+          value={groupName}
+          onChange={setGroupName}
+          onSubmit={addGroup}
+          busy={action.busy}
+        />
+      </Card>
+    </Stack>
+  );
+}
+
+function NewGroupForm({
+  value,
+  onChange,
+  onSubmit,
+  busy,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: (e: FormEvent) => void;
+  busy: boolean;
+}) {
+  const t = useT();
+  return (
+    <form onSubmit={onSubmit}>
+      <Group gap="sm">
+        <TextInput
           required
           placeholder={t('e.g. Starters')}
-          value={groupName}
-          onChange={(e) => setGroupName(e.target.value)}
+          value={value}
+          onChange={(e) => onChange(e.currentTarget.value)}
+          w={260}
         />
-        <button className="primary small" disabled={action.busy}>
+        <Button type="submit" variant="default" leftSection={<IconPlus size={16} />} loading={busy}>
           {t('Add group')}
-        </button>
-      </form>
-    </>
+        </Button>
+      </Group>
+    </form>
   );
 }
 
@@ -178,52 +286,49 @@ function ArticleRow({
   const update = (body: Partial<Omit<Article, 'id'>>) =>
     save(() => api.updateArticle(tenantId, article.id, body));
   return (
-    <tr className={article.active ? '' : 'muted'}>
-      <td>
-        <InlineText value={article.name} onSave={(name) => update({ name })} />
-      </td>
-      <td className="num">
+    <Table.Tr opacity={article.active ? 1 : 0.5}>
+      <Table.Td>
+        <InlineText value={article.name} fw={500} onSave={(name) => update({ name })} />
+      </Table.Td>
+      <Table.Td ta="right">
         <InlineText
           value={(article.priceOre / 100).toFixed(2).replace('.', ',')}
           display={formatKr(article.priceOre)}
           validate={(v) => parseKr(v) !== null}
           onSave={(v) => update({ priceOre: parseKr(v)! })}
+          className="tabular"
         />
-      </td>
-      <td>
-        <select
-          value={article.vatRate}
-          onChange={(e) => update({ vatRate: Number(e.target.value) as VatRate })}
-        >
-          {VAT_OPTIONS.map((o) => (
-            <option key={o.rate} value={o.rate}>
-              {t(o.label)}
-            </option>
-          ))}
-        </select>
-      </td>
-      <td>
-        <select
+      </Table.Td>
+      <Table.Td>
+        <Select
+          size="xs"
+          allowDeselect={false}
+          value={String(article.vatRate)}
+          onChange={(v) => v && update({ vatRate: Number(v) as VatRate })}
+          data={VAT_OPTIONS.map((o) => ({ value: String(o.rate), label: t(o.label) }))}
+        />
+      </Table.Td>
+      <Table.Td>
+        <Select
+          size="xs"
           value={article.menuGroupId ?? ''}
-          onChange={(e) => update({ menuGroupId: e.target.value || null })}
-        >
-          <option value="">{t('No group')}</option>
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </select>
-      </td>
-      <td>
-        <input
-          type="checkbox"
-          aria-label={t('Shown at the till')}
-          checked={article.active}
-          onChange={(e) => update({ active: e.target.checked })}
+          onChange={(v) => update({ menuGroupId: v || null })}
+          data={[
+            { value: '', label: t('No group') },
+            ...groups.map((g) => ({ value: g.id, label: g.name })),
+          ]}
         />
-      </td>
-    </tr>
+      </Table.Td>
+      <Table.Td>
+        <Center>
+          <Switch
+            aria-label={t('Shown at the till')}
+            checked={article.active}
+            onChange={(e) => update({ active: e.currentTarget.checked })}
+          />
+        </Center>
+      </Table.Td>
+    </Table.Tr>
   );
 }
 
@@ -254,31 +359,43 @@ function NewArticleForm({
   }
 
   return (
-    <form className="inline-form" onSubmit={submit}>
-      <input
-        required
-        placeholder={t('New item')}
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
-      <input
-        required
-        inputMode="decimal"
-        placeholder={t('Price in kr')}
-        className={price && priceOre === null ? 'invalid' : ''}
-        value={price}
-        onChange={(e) => setPrice(e.target.value)}
-      />
-      <select value={vatRate} onChange={(e) => setVatRate(Number(e.target.value) as VatRate)}>
-        {VAT_OPTIONS.map((o) => (
-          <option key={o.rate} value={o.rate}>
-            {t(o.label)}
-          </option>
-        ))}
-      </select>
-      <button className="primary small" disabled={!name || priceOre === null}>
-        {t('Add')}
-      </button>
+    <form onSubmit={submit}>
+      <Group px="lg" py="sm" gap="sm" className="card-footer">
+        <TextInput
+          required
+          size="xs"
+          placeholder={t('New item')}
+          value={name}
+          onChange={(e) => setName(e.currentTarget.value)}
+          style={{ flex: 1, minWidth: 180 }}
+        />
+        <TextInput
+          required
+          size="xs"
+          inputMode="decimal"
+          placeholder={t('Price in kr')}
+          error={price !== '' && priceOre === null}
+          value={price}
+          onChange={(e) => setPrice(e.currentTarget.value)}
+          w={120}
+        />
+        <Select
+          size="xs"
+          allowDeselect={false}
+          value={String(vatRate)}
+          onChange={(v) => v && setVatRate(Number(v) as VatRate)}
+          data={VAT_OPTIONS.map((o) => ({ value: String(o.rate), label: t(o.label) }))}
+          w={150}
+        />
+        <Button
+          type="submit"
+          size="xs"
+          leftSection={<IconPlus size={14} />}
+          disabled={!name || priceOre === null}
+        >
+          {t('Add')}
+        </Button>
+      </Group>
     </form>
   );
 }
@@ -289,13 +406,17 @@ function InlineText({
   display,
   onSave,
   validate = (v) => v.trim().length > 0,
-  className = '',
+  className,
+  fw,
+  fz,
 }: {
   value: string;
   display?: string;
   onSave: (value: string) => Promise<void>;
   validate?: (value: string) => boolean;
   className?: string;
+  fw?: number;
+  fz?: string;
 }) {
   const t = useT();
   const [editing, setEditing] = useState(false);
@@ -303,17 +424,18 @@ function InlineText({
 
   if (!editing) {
     return (
-      <button
-        type="button"
-        className={`inline-edit ${className}`}
+      <UnstyledButton
+        className={`inline-edit ${className ?? ''}`}
         title={t('Click to change')}
         onClick={() => {
           setDraft(value);
           setEditing(true);
         }}
       >
-        {display ?? value}
-      </button>
+        <Text span fw={fw} fz={fz} inherit={!fz}>
+          {display ?? value}
+        </Text>
+      </UnstyledButton>
     );
   }
 
@@ -323,11 +445,12 @@ function InlineText({
   };
 
   return (
-    <input
+    <TextInput
       autoFocus
-      className={validate(draft) ? '' : 'invalid'}
+      size="xs"
+      error={!validate(draft)}
       value={draft}
-      onChange={(e) => setDraft(e.target.value)}
+      onChange={(e) => setDraft(e.currentTarget.value)}
       onBlur={commit}
       onKeyDown={(e) => {
         if (e.key === 'Enter') void commit();

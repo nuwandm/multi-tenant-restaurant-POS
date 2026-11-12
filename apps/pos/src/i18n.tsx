@@ -1,3 +1,11 @@
+import {
+  ActionIcon,
+  SegmentedControl,
+  Tooltip,
+  useComputedColorScheme,
+  useMantineColorScheme,
+} from '@mantine/core';
+import { IconMoon, IconSun } from '@tabler/icons-react';
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { sv } from './sv';
 
@@ -56,21 +64,43 @@ export function useT() {
   return translate;
 }
 
-export function LanguageToggle() {
+export function LanguageToggle({ size = 'xs' }: { size?: 'xs' | 'sm' }) {
   const { lang, setLang } = useContext(LanguageContext);
   return (
-    <div className="lang-toggle" role="group" aria-label="Language / Språk">
-      {(['en', 'sv'] as const).map((l) => (
-        <button
-          key={l}
-          type="button"
-          className={lang === l ? 'active' : ''}
-          aria-pressed={lang === l}
-          onClick={() => setLang(l)}
-        >
-          {l.toUpperCase()}
-        </button>
-      ))}
-    </div>
+    <SegmentedControl
+      size={size}
+      radius="xl"
+      aria-label="Language / Språk"
+      value={lang}
+      onChange={(value) => setLang(value as Lang)}
+      data={[
+        { value: 'en', label: 'EN' },
+        { value: 'sv', label: 'SV' },
+      ]}
+    />
+  );
+}
+
+/** Light / dark switch; Mantine remembers the choice per device. */
+export function ColorSchemeToggle() {
+  const { setColorScheme } = useMantineColorScheme();
+  const scheme = useComputedColorScheme('light');
+  const label = translate(scheme === 'dark' ? 'Light mode' : 'Dark mode');
+  return (
+    <Tooltip label={label}>
+      <ActionIcon
+        variant="default"
+        size="lg"
+        radius="xl"
+        aria-label={label}
+        onClick={() => setColorScheme(scheme === 'dark' ? 'light' : 'dark')}
+      >
+        {scheme === 'dark' ? (
+          <IconSun size={18} stroke={1.6} />
+        ) : (
+          <IconMoon size={18} stroke={1.6} />
+        )}
+      </ActionIcon>
+    </Tooltip>
   );
 }

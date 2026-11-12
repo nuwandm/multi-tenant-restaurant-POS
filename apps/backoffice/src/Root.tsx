@@ -1,3 +1,4 @@
+import { Center, Loader } from '@mantine/core';
 import { useCallback, useEffect, useState } from 'react';
 import { api, hasToken, setLoggedOutHandler, type Me } from './api';
 import { AuthPages } from './AuthPages';
@@ -41,7 +42,13 @@ export function Root() {
   if (link?.page === 'reset') {
     return <ResetPasswordPage token={link.token} onDone={() => setLink(null)} />;
   }
-  if (checking) return <div className="center-message">{t('Loading…')}</div>;
+  if (checking) {
+    return (
+      <Center h="100vh" aria-label={t('Loading…')}>
+        <Loader type="dots" />
+      </Center>
+    );
+  }
   if (!me) return <AuthPages onLoggedIn={() => void refresh()} />;
   return (
     <Shell

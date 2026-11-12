@@ -1,0 +1,197 @@
+/* Till layout. Shared tokens are in design.css. */
+
+:root {
+  --till-surface: var(--app-bg);
+  --till-line: var(--app-line);
+  --paper: #fffdf8;
+  --paper-ink: #1f1d1a;
+}
+
+[data-mantine-color-scheme='dark'] {
+  --paper: #efece5;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--till-surface);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+input,
+textarea {
+  user-select: text;
+}
+
+.till-header {
+  background: color-mix(in srgb, var(--app-surface) 82%, transparent);
+  backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid var(--app-line);
+}
+
+.order-panel {
+  background: var(--app-surface);
+  border-left: 1px solid var(--app-line);
+  box-shadow: -8px 0 24px -16px rgb(9 9 11 / 0.12);
+}
+
+.category-tab {
+  flex: none;
+}
+
+/* Menu items: large touch targets that respond immediately. */
+.item-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 112px;
+  padding: 16px;
+  border: 1px solid var(--app-line);
+  border-radius: var(--mantine-radius-lg);
+  background: var(--app-surface);
+  box-shadow: var(--mantine-shadow-xs);
+  transition:
+    transform 90ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.item-card:hover {
+  border-color: var(--app-line-strong);
+  box-shadow: var(--mantine-shadow-sm);
+}
+
+.item-card:active {
+  transform: scale(0.975);
+}
+
+.item-card[data-in-order='true'] {
+  border-color: var(--mantine-color-brand-filled);
+  box-shadow:
+    0 0 0 1px var(--mantine-color-brand-filled),
+    var(--mantine-shadow-sm);
+}
+
+.item-price {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.875rem;
+  color: var(--mantine-color-dimmed);
+  letter-spacing: -0.01em;
+}
+
+.total-figure {
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Staff tiles on the login screen. */
+.staff-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 12px;
+  border: 1px solid var(--till-line);
+  border-radius: var(--mantine-radius-lg);
+  background: var(--mantine-color-body);
+  transition: border-color 120ms ease;
+}
+
+.staff-tile:hover {
+  border-color: var(--mantine-color-brand-5);
+}
+
+/* PIN dots */
+.pin-dots {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  height: 18px;
+}
+
+.pin-dots span {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--mantine-color-gray-5);
+  transition: background 100ms ease;
+}
+
+.pin-dots span[data-filled='true'] {
+  background: var(--mantine-color-brand-6);
+  border-color: var(--mantine-color-brand-6);
+}
+
+/* The receipt looks like the paper it will be printed on. */
+.receipt-paper {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 13px;
+  line-height: 1.55;
+  padding: 22px 20px 26px;
+  background: var(--paper);
+  color: var(--paper-ink);
+  border-radius: 4px;
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.08),
+    0 8px 24px rgb(0 0 0 / 0.06);
+  mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 14px 100%;
+}
+
+.receipt-paper .row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.receipt-paper .center {
+  text-align: center;
+}
+
+.receipt-paper hr {
+  border: none;
+  border-top: 1px dashed currentColor;
+  opacity: 0.45;
+  margin: 10px 0;
+}
+
+.receipt-paper .stamp {
+  margin-bottom: 10px;
+  padding: 4px;
+  border: 1.5px solid currentColor;
+  text-align: center;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .receipt-paper,
+  .receipt-paper * {
+    visibility: visible;
+  }
+
+  .receipt-paper {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 80mm;
+    box-shadow: none;
+    mask: none;
+  }
+}

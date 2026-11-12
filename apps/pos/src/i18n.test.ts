@@ -17,7 +17,7 @@ function englishStrings(): string[] {
     for (const m of source.matchAll(/\bt\(\s*'((?:[^'\\]|\\.)*)'/g))
       found.add(m[1]!.replace(/\\'/g, "'"));
     const maps = source.match(
-      /(ERROR_TEXT|PAYMENT_LABELS|KIND_LABELS|BANNERS|ROLE_LABELS)\b[^=]*=\s*\{[\s\S]*?\n\};/g,
+      /const (ERROR_TEXT|PAYMENT_LABELS|KIND_LABELS|BANNERS|ROLE_LABELS)\b[^=]*=\s*\{[\s\S]*?\n\};/g,
     );
     for (const block of maps ?? []) {
       for (const m of block.matchAll(/:\s*'((?:[^'\\]|\\.)*)'/g))

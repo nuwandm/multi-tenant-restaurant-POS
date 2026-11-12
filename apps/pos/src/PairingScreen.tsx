@@ -1,6 +1,9 @@
+import { Alert, Button, List, Stack, Text, TextInput, ThemeIcon, Title } from '@mantine/core';
+import { IconAlertCircle, IconDeviceTablet } from '@tabler/icons-react';
 import { useState, type FormEvent } from 'react';
 import { pairDevice } from './api';
-import { LanguageToggle, useT } from './i18n';
+import { useT } from './i18n';
+import { StartLayout } from './StartLayout';
 
 interface Props {
   onPaired: () => void;
@@ -31,47 +34,77 @@ export function PairingScreen({ onPaired }: Props) {
   }
 
   return (
-    <div className="login">
-      <form className="pairing" onSubmit={submit}>
-        <LanguageToggle />
-        <h1>{t('Pair this device')}</h1>
-        <ol className="muted">
-          <li>{t('Log in to the back office and open Restaurants & registers.')}</li>
-          <li>{t('Press Pair device next to the register this device should be.')}</li>
-          <li>{t('Type the code here. It is valid for 15 minutes.')}</li>
-        </ol>
-        <label className="field">
-          {t('Code')}
-          <input
-            className="code-input"
+    <StartLayout>
+      <form onSubmit={submit}>
+        <Stack gap="lg">
+          <Stack gap={6}>
+            <ThemeIcon size={44} radius="md" variant="light">
+              <IconDeviceTablet size={24} stroke={1.6} />
+            </ThemeIcon>
+            <Title order={2} fz={24}>
+              {t('Pair this device')}
+            </Title>
+            <Text c="dimmed" fz="sm">
+              {t(
+                'Connect this tablet or computer to one of your registers. You only do this once.',
+              )}
+            </Text>
+          </Stack>
+
+          <List type="ordered" spacing={6} fz="sm" c="dimmed">
+            <List.Item>
+              {t('Log in to the back office and open Restaurants & registers.')}
+            </List.Item>
+            <List.Item>
+              {t('Press Pair device next to the register this device should be.')}
+            </List.Item>
+            <List.Item>{t('Type the code here. It is valid for 15 minutes.')}</List.Item>
+          </List>
+
+          <TextInput
+            label={t('Code')}
             required
             autoFocus
             autoComplete="off"
             autoCapitalize="characters"
             placeholder="XXXX-XXXX"
             maxLength={12}
+            size="lg"
             value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
+            onChange={(e) => setCode(e.currentTarget.value.toUpperCase())}
+            styles={{
+              input: {
+                fontFamily: 'var(--mantine-font-family-monospace)',
+                letterSpacing: '0.18em',
+                textAlign: 'center',
+                fontSize: 24,
+              },
+            }}
           />
-        </label>
-        <label className="field">
-          {t('Device name (optional)')}
-          <input
+          <TextInput
+            label={t('Device name (optional)')}
             placeholder={t('e.g. iPad at the bar')}
             maxLength={60}
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => setName(e.currentTarget.value)}
           />
-        </label>
-        {error && (
-          <p className="error" role="alert">
-            {t(error)}
-          </p>
-        )}
-        <button className="primary full" disabled={busy || code.replace(/[\s-]/g, '').length < 8}>
-          {busy ? t('Pairing…') : t('Pair')}
-        </button>
+
+          {error && (
+            <Alert color="red" variant="light" icon={<IconAlertCircle size={18} />}>
+              {t(error)}
+            </Alert>
+          )}
+
+          <Button
+            type="submit"
+            size="lg"
+            loading={busy}
+            disabled={code.replace(/[\s-]/g, '').length < 8}
+          >
+            {t('Pair')}
+          </Button>
+        </Stack>
       </form>
-    </div>
+    </StartLayout>
   );
 }

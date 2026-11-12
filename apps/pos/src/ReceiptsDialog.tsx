@@ -1,3 +1,28 @@
+import {
+  ActionIcon,
+  Alert,
+  Badge,
+  Button,
+  Center,
+  Group,
+  Loader,
+  Modal,
+  Paper,
+  ScrollArea,
+  SegmentedControl,
+  Stack,
+  Table,
+  Text,
+  Tooltip,
+} from '@mantine/core';
+import {
+  IconArrowLeft,
+  IconCopy,
+  IconLock,
+  IconMinus,
+  IconPlus,
+  IconReceiptRefund,
+} from '@tabler/icons-react';
 import { divRound, ore, roundToKrona, type PaymentMethod } from '@pos/domain';
 import { useEffect, useState } from 'react';
 import {
@@ -24,6 +49,14 @@ export const KIND_LABELS: Record<Receipt['kind'], string> = {
   copy: 'Copy',
   training: 'Training',
   proforma: 'Proforma',
+};
+
+const KIND_COLORS: Record<Receipt['kind'], string> = {
+  sale: 'brand',
+  return: 'red',
+  copy: 'gray',
+  training: 'orange',
+  proforma: 'gray',
 };
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -57,99 +90,141 @@ export function ReceiptsDialog({ onDone, onClose, canReturn }: Props) {
     }
   }
 
-  return (
-    <div className="overlay" role="dialog" aria-modal="true" aria-label={t('Receipts')}>
-      <div className="dialog wide">
-        <div className="dialog-header">
-          <h2>
-            {selected
-              ? t('{kind} no. {number}', {
-                  kind: t(KIND_LABELS[selected.kind]),
-                  number: selected.receiptNumber,
-                })
-              : t('Receipts')}
-          </h2>
-          <button
-            type="button"
-            className="link"
-            onClick={selected ? () => setSelected(null) : onClose}
-          >
-            {selected ? t('← Back') : t('Close')}
-          </button>
-        </div>
+  const title = selected ? (
+    <Group gap="xs">
+      <ActionIcon
+        variant="subtle"
+        color="gray"
+        onClick={() => (returning ? setReturning(false) : setSelected(null))}
+        aria-label={t('← Back')}
+      >
+        <IconArrowLeft size={18} />
+      </ActionIcon>
+      <Text fw={650} fz="lg">
+        {t('{kind} no. {number}', {
+          kind: t(KIND_LABELS[selected.kind]),
+          number: selected.receiptNumber,
+        })}
+      </Text>
+    </Group>
+  ) : (
+    <Text fw={650} fz="lg">
+      {t('Receipts')}
+    </Text>
+  );
 
+  return (
+    <Modal opened onClose={onClose} size="lg" title={title}>
+      <Stack gap="md">
         {error && (
-          <p className="error" role="alert">
+          <Alert color="red" variant="light">
             {t(error)}
-          </p>
+          </Alert>
         )}
 
-        {!selected && !receipts && !error && <p className="muted">{t('Loading…')}</p>}
-        {!selected && receipts?.length === 0 && <p className="muted">{t('No receipts yet.')}</p>}
+        {!selected && !receipts && !error && (
+          <Center h={200}>
+            <Loader type="dots" />
+          </Center>
+        )}
+        {!selected && receipts?.length === 0 && (
+          <Text c="dimmed" ta="center" py="xl">
+            {t('No receipts yet.')}
+          </Text>
+        )}
         {!selected && receipts && receipts.length > 0 && (
-          <ul className="receipt-list">
-            {receipts.map((r) => (
-              <li key={r.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelected(r);
-                    setAttemptKey(newAttemptKey());
-                    setReturning(false);
-                    setError(null);
-                  }}
-                >
-                  <span className={`kind kind-${r.kind}`}>{t(KIND_LABELS[r.kind])}</span>
-                  <span>{t('no. {number}', { number: r.receiptNumber })}</span>
-                  <span className="muted">{formatDateTime(r.createdAt)}</span>
-                  <span className="amount">{formatKr(r.totalOre)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <ScrollArea.Autosize mah="60vh">
+            <Table highlightOnHover verticalSpacing="sm">
+              <Table.Tbody>
+                {receipts.map((r) => (
+                  <Table.Tr
+                    key={r.id}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => {
+                      setSelected(r);
+                      setAttemptKey(newAttemptKey());
+                      setReturning(false);
+                      setError(null);
+                    }}
+                  >
+                    <Table.Td w={120}>
+                      <Badge variant="light" color={KIND_COLORS[r.kind]} radius="sm">
+                        {t(KIND_LABELS[r.kind])}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td fw={600} className="tabular">
+                      {t('no. {number}', { number: r.receiptNumber })}
+                    </Table.Td>
+                    <Table.Td c="dimmed" fz="sm">
+                      {formatDateTime(r.createdAt)}
+                      {r.cashier && ` · ${r.cashier.displayName}`}
+                    </Table.Td>
+                    <Table.Td ta="right" fw={600} className="tabular">
+                      {formatKr(r.totalOre)}
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </ScrollArea.Autosize>
         )}
 
         {selected && !returning && (
           <>
-            <ul className="detail-lines">
-              {selected.lines.map((l) => (
-                <li key={l.lineNo} className="row">
-                  <span>
-                    {l.quantity} × {l.name}
-                    {(selected.returnedQuantities[l.lineNo] ?? 0) > 0 && (
-                      <span className="muted">
-                        {' '}
-                        {t('(returned {count})', { count: selected.returnedQuantities[l.lineNo]! })}
-                      </span>
-                    )}
-                  </span>
-                  <span>{formatKr(l.lineTotalOre)}</span>
-                </li>
-              ))}
-            </ul>
-            <p className="row grand-total">
-              <span>{t('Total')}</span>
-              <span>{formatKr(selected.totalOre)}</span>
-            </p>
-            <div className="dialog-actions">
-              <button
-                type="button"
-                className="secondary"
-                disabled={busy || selected.kind === 'copy'}
+            <Paper withBorder radius="md">
+              <Table verticalSpacing="sm">
+                <Table.Tbody>
+                  {selected.lines.map((l) => (
+                    <Table.Tr key={l.lineNo}>
+                      <Table.Td>
+                        {l.quantity} × {l.name}
+                        {(selected.returnedQuantities[l.lineNo] ?? 0) > 0 && (
+                          <Text span c="dimmed" fz="sm">
+                            {' '}
+                            {t('(returned {count})', {
+                              count: selected.returnedQuantities[l.lineNo]!,
+                            })}
+                          </Text>
+                        )}
+                      </Table.Td>
+                      <Table.Td ta="right" className="tabular">
+                        {formatKr(l.lineTotalOre)}
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Paper>
+            <Group justify="space-between" px="xs">
+              <Text fw={600}>{t('Total')}</Text>
+              <Text fz="xl" fw={700} className="tabular">
+                {formatKr(selected.totalOre)}
+              </Text>
+            </Group>
+            <Group grow>
+              <Button
+                variant="default"
+                size="md"
+                leftSection={<IconCopy size={18} />}
+                loading={busy}
+                disabled={selected.kind === 'copy'}
                 onClick={() => run(() => createCopy(selected.id, attemptKey))}
               >
                 {t('Print copy')}
-              </button>
-              <button
-                type="button"
-                className="primary"
-                disabled={busy || selected.kind !== 'sale' || !canReturn}
-                title={canReturn ? undefined : t('Managers and owners only')}
-                onClick={() => setReturning(true)}
-              >
-                {t('Return…')}
-              </button>
-            </div>
+              </Button>
+              <Tooltip label={t('Managers and owners only')} disabled={canReturn}>
+                <Button
+                  size="md"
+                  color="red"
+                  variant="light"
+                  leftSection={canReturn ? <IconReceiptRefund size={18} /> : <IconLock size={16} />}
+                  disabled={busy || selected.kind !== 'sale' || !canReturn}
+                  onClick={() => setReturning(true)}
+                >
+                  {t('Return…')}
+                </Button>
+              </Tooltip>
+            </Group>
           </>
         )}
 
@@ -171,8 +246,8 @@ export function ReceiptsDialog({ onDone, onClose, canReturn }: Props) {
             }
           />
         )}
-      </div>
-    </div>
+      </Stack>
+    </Modal>
   );
 }
 
@@ -204,67 +279,87 @@ function ReturnForm({ original, busy, onSubmit }: ReturnFormProps) {
     .map(([lineNo, quantity]) => ({ lineNo: Number(lineNo), quantity }));
 
   return (
-    <>
-      <ul className="detail-lines">
-        {original.lines.map((l) => {
-          const left = l.quantity - (original.returnedQuantities[l.lineNo] ?? 0);
-          const q = quantities[l.lineNo] ?? 0;
-          const set = (n: number) => setQuantities((qs) => ({ ...qs, [l.lineNo]: n }));
-          return (
-            <li key={l.lineNo} className="return-line">
-              <span>
-                {l.name} <span className="muted">{t('({count} left)', { count: left })}</span>
-              </span>
-              <span className="qty">
-                <button
-                  type="button"
-                  disabled={q === 0}
-                  onClick={() => set(q - 1)}
-                  aria-label={t('Fewer')}
-                >
-                  −
-                </button>
-                <span>{q}</span>
-                <button
-                  type="button"
-                  disabled={q >= left}
-                  onClick={() => set(q + 1)}
-                  aria-label={t('More')}
-                >
-                  +
-                </button>
-              </span>
-            </li>
-          );
-        })}
-      </ul>
+    <Stack gap="md">
+      <Text fz="sm" c="dimmed">
+        {t('Choose how many of each item to return.')}
+      </Text>
+      <Paper withBorder radius="md">
+        <Table verticalSpacing="sm">
+          <Table.Tbody>
+            {original.lines.map((l) => {
+              const left = l.quantity - (original.returnedQuantities[l.lineNo] ?? 0);
+              const q = quantities[l.lineNo] ?? 0;
+              const set = (n: number) => setQuantities((qs) => ({ ...qs, [l.lineNo]: n }));
+              return (
+                <Table.Tr key={l.lineNo} opacity={left === 0 ? 0.5 : 1}>
+                  <Table.Td>
+                    <Text fw={550}>{l.name}</Text>
+                    <Text fz="xs" c="dimmed">
+                      {t('({count} left)', { count: left })}
+                    </Text>
+                  </Table.Td>
+                  <Table.Td w={150}>
+                    <Group gap={6} justify="flex-end" wrap="nowrap">
+                      <ActionIcon
+                        variant="default"
+                        radius="xl"
+                        disabled={q === 0}
+                        onClick={() => set(q - 1)}
+                        aria-label={t('Fewer')}
+                      >
+                        <IconMinus size={14} />
+                      </ActionIcon>
+                      <Text w={24} ta="center" fw={600} className="tabular">
+                        {q}
+                      </Text>
+                      <ActionIcon
+                        variant="default"
+                        radius="xl"
+                        disabled={q >= left}
+                        onClick={() => set(q + 1)}
+                        aria-label={t('More')}
+                      >
+                        <IconPlus size={14} />
+                      </ActionIcon>
+                    </Group>
+                  </Table.Td>
+                </Table.Tr>
+              );
+            })}
+          </Table.Tbody>
+        </Table>
+      </Paper>
 
-      <p className="muted small">{t('Refund with')}</p>
-      <div className="method-choice">
-        {(['card', 'swish', 'cash'] as const).map((m) => (
-          <button
-            key={m}
-            type="button"
-            className={m === method ? 'active' : ''}
-            onClick={() => setMethod(m)}
-          >
-            {t(PAYMENT_LABELS[m])}
-          </button>
-        ))}
-      </div>
+      <Stack gap={6}>
+        <Text fz="sm" fw={600}>
+          {t('Refund with')}
+        </Text>
+        <SegmentedControl
+          fullWidth
+          value={method}
+          onChange={(value) => setMethod(value as PaymentMethod)}
+          data={(['card', 'swish', 'cash'] as const).map((m) => ({
+            value: m,
+            label: t(PAYMENT_LABELS[m]),
+          }))}
+        />
+      </Stack>
 
-      <p className="row grand-total">
-        <span>{t('Refund')}</span>
-        <span>{formatKr(payOutOre)}</span>
-      </p>
-      <button
-        type="button"
-        className="primary full"
-        disabled={busy || lines.length === 0}
+      <Group justify="space-between" px="xs">
+        <Text fw={600}>{t('Refund')}</Text>
+        <Text fz="xl" fw={700} c="red" className="tabular">
+          {formatKr(payOutOre)}
+        </Text>
+      </Group>
+      <Button
+        size="md"
+        color="red"
+        loading={busy}
+        disabled={lines.length === 0}
         onClick={() => onSubmit(lines, method, -payOutOre)}
       >
-        {busy ? t('Signing…') : t('Make return')}
-      </button>
-    </>
+        {t('Make return')}
+      </Button>
+    </Stack>
   );
 }
