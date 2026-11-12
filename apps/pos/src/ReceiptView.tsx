@@ -32,6 +32,7 @@ export function ReceiptView({ receipt, restaurantName, changeOre, onNewSale }: P
             <span>Kvitto nr {receipt.receiptNumber}</span>
           </p>
           <p>{formatDateTime(receipt.createdAt)}</p>
+          {receipt.cashier && <p>Kassör: {receipt.cashier.displayName}</p>}
           <hr />
           {receipt.lines.map((l) => (
             <p key={l.lineNo} className="row">

@@ -8,6 +8,7 @@ import {
   type ZReportTotals,
 } from '@pos/domain';
 import type { Sql, TransactionSql } from 'postgres';
+import type { StaffSession } from '../auth/session';
 import { withTenant } from '../db/tenant';
 import { lockRegister, type LockedRegister } from '../sales/register';
 import { appendJournalEvent, nextValue } from '../sales/sequences';
@@ -25,11 +26,8 @@ export interface ZReport extends Report {
 }
 
 /** X report: totals of the open period so far. Changes nothing except the journal. */
-export async function createXReport(
-  sql: Sql,
-  tenantId: string,
-  registerId: string,
-): Promise<Report> {
+export async function createXReport(sql: Sql, staff: StaffSession): Promise<Report> {
+  const { tenantId, registerId } = staff;
   return withTenant(sql, tenantId, async (tx) => {
     const register = await lockRegister(tx, registerId, { forSelling: false });
     const report = await openPeriodReport(tx, register);
@@ -43,11 +41,8 @@ export async function createXReport(
 }
 
 /** Z report: closes the open period, stores its totals for good and numbers it. */
-export async function createZReport(
-  sql: Sql,
-  tenantId: string,
-  registerId: string,
-): Promise<ZReport> {
+export async function createZReport(sql: Sql, staff: StaffSession): Promise<ZReport> {
+  const { tenantId, registerId } = staff;
   return withTenant(sql, tenantId, async (tx) => {
     const register = await lockRegister(tx, registerId, { forSelling: false });
     const report = await openPeriodReport(tx, register);
@@ -83,6 +78,7 @@ export async function createZReport(
 
     await appendJournalEvent(tx, tenantId, registerId, 'z_report', report.periodTo, {
       zReportId: row!.id,
+      takenBy: staff.userId,
       zNumber,
       periodFrom: report.periodFrom.toISOString(),
       periodTo: report.periodTo.toISOString(),

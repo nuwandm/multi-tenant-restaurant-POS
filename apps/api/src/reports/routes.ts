@@ -1,20 +1,24 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppDeps } from '../app';
-import { registerParams, tenantHeaders } from '../http-schemas';
+import { requireStaff } from '../auth/session';
+import { registerParams } from '../http-schemas';
 import { createXReport, createZReport } from './reports';
 
-type ReportRequest = { Headers: { 'x-tenant-id': string }; Params: { registerId: string } };
+type ReportRequest = { Params: { registerId: string } };
 
-const schema = { headers: tenantHeaders, params: registerParams };
+const schema = { params: registerParams };
 
 export function reportRoutes(app: FastifyInstance, deps: AppDeps) {
-  app.post<ReportRequest>('/registers/:registerId/x-reports', { schema }, async (req, reply) => {
-    const report = await createXReport(deps.sql, req.headers['x-tenant-id'], req.params.registerId);
-    return reply.status(201).send(report);
-  });
+  app.post<ReportRequest>(
+    '/registers/:registerId/x-reports',
+    { schema, preHandler: requireStaff(deps.sql) },
+    async (req, reply) => reply.status(201).send(await createXReport(deps.sql, req.staff!)),
+  );
 
-  app.post<ReportRequest>('/registers/:registerId/z-reports', { schema }, async (req, reply) => {
-    const report = await createZReport(deps.sql, req.headers['x-tenant-id'], req.params.registerId);
-    return reply.status(201).send(report);
-  });
+  // Closing the day is a manager's job.
+  app.post<ReportRequest>(
+    '/registers/:registerId/z-reports',
+    { schema, preHandler: requireStaff(deps.sql, ['owner', 'manager']) },
+    async (req, reply) => reply.status(201).send(await createZReport(deps.sql, req.staff!)),
+  );
 }

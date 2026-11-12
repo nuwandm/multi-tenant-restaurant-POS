@@ -1,7 +1,7 @@
 import { FakeControlSystem } from '@pos/control-system';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { testDatabaseUrl } from '../../test/db';
-import { createArticle, createTenant, type TenantFixture } from '../../test/fixtures';
+import { auth, createArticle, createTenant, type TenantFixture } from '../../test/fixtures';
 import { buildApp } from '../app';
 import { createSql } from '../db/client';
 import { withTenant } from '../db/tenant';
@@ -28,7 +28,7 @@ function post(fixture: TenantFixture, path: string, payload: object) {
   return app.inject({
     method: 'POST',
     url: `/registers/${fixture.registerId}/${path}`,
-    headers: { 'x-tenant-id': fixture.tenantId },
+    headers: auth(fixture.token),
     payload,
   });
 }
@@ -95,7 +95,7 @@ describe('POST /registers/:id/returns', () => {
     const res = await app.inject({
       method: 'GET',
       url: `/registers/${shop.registerId}/receipts?limit=5`,
-      headers: { 'x-tenant-id': shop.tenantId },
+      headers: auth(shop.token),
     });
     const listed = (res.json() as { id: string; returnedQuantities: object }[]).find(
       (r) => r.id === original.id,

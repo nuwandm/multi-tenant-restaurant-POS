@@ -2,7 +2,7 @@ import { verifyJournalChain, type JournalEvent } from '@pos/domain';
 import { FakeControlSystem } from '@pos/control-system';
 import { afterAll, describe, expect, it } from 'vitest';
 import { testDatabaseUrl } from '../../test/db';
-import { createArticle, createTenant, type TenantFixture } from '../../test/fixtures';
+import { auth, createArticle, createTenant, type TenantFixture } from '../../test/fixtures';
 import { buildApp } from '../app';
 import { createSql } from '../db/client';
 import { withTenant } from '../db/tenant';
@@ -19,7 +19,7 @@ function post(fixture: TenantFixture, path: string, payload?: object) {
   return app.inject({
     method: 'POST',
     url: `/registers/${fixture.registerId}/${path}`,
-    headers: { 'x-tenant-id': fixture.tenantId },
+    headers: auth(fixture.token),
     ...(payload && { payload }),
   });
 }
@@ -103,9 +103,9 @@ describe('Z report', () => {
     const res = await app.inject({
       method: 'POST',
       url: `/registers/${fixture.registerId}/z-reports`,
-      headers: { 'x-tenant-id': other.tenantId },
+      headers: auth(other.token),
     });
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode).toBe(403);
   });
 });
 

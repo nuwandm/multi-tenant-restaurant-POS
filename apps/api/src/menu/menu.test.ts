@@ -1,7 +1,7 @@
 import { FakeControlSystem } from '@pos/control-system';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { testDatabaseUrl } from '../../test/db';
-import { createArticle, createTenant, type TenantFixture } from '../../test/fixtures';
+import { auth, createArticle, createTenant, type TenantFixture } from '../../test/fixtures';
 import { buildApp } from '../app';
 import { createSql } from '../db/client';
 import { withTenant } from '../db/tenant';
@@ -35,16 +35,16 @@ afterAll(async () => {
   await sql.end();
 });
 
-const getMenu = (registerId: string, tenantId: string) =>
+const getMenu = (registerId: string, token: string) =>
   app.inject({
     method: 'GET',
     url: `/registers/${registerId}/menu`,
-    headers: { 'x-tenant-id': tenantId },
+    headers: auth(token),
   });
 
 describe('GET /registers/:id/menu', () => {
   it('returns the register, seller and active articles grouped', async () => {
-    const res = await getMenu(shop.registerId, shop.tenantId);
+    const res = await getMenu(shop.registerId, shop.token);
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({
@@ -58,9 +58,9 @@ describe('GET /registers/:id/menu', () => {
     });
   });
 
-  it("does not show another tenant's register", async () => {
+  it("does not show another company's register", async () => {
     const other = await createTenant(sql);
-    const res = await getMenu(shop.registerId, other.tenantId);
-    expect(res.statusCode).toBe(404);
+    const res = await getMenu(shop.registerId, other.token);
+    expect(res.statusCode).toBe(403);
   });
 });

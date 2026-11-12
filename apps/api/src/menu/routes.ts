@@ -1,9 +1,10 @@
 import type { VatRate } from '@pos/domain';
 import type { FastifyInstance } from 'fastify';
 import type { AppDeps } from '../app';
+import { requireStaff } from '../auth/session';
 import { withTenant } from '../db/tenant';
 import { HttpError } from '../errors';
-import { registerParams, tenantHeaders } from '../http-schemas';
+import { registerParams } from '../http-schemas';
 
 const UNGROUPED = 'Övrigt';
 
@@ -25,12 +26,12 @@ interface ArticleRow {
 }
 
 export function menuRoutes(app: FastifyInstance, deps: AppDeps) {
-  app.get<{ Headers: { 'x-tenant-id': string }; Params: { registerId: string } }>(
+  app.get<{ Params: { registerId: string } }>(
     '/registers/:registerId/menu',
-    { schema: { headers: tenantHeaders, params: registerParams } },
+    { schema: { params: registerParams }, preHandler: requireStaff(deps.sql) },
     async (req) => {
       const { registerId } = req.params;
-      return withTenant(deps.sql, req.headers['x-tenant-id'], async (tx) => {
+      return withTenant(deps.sql, req.staff!.tenantId, async (tx) => {
         const [register] = await tx<RegisterRow[]>`
           SELECT r.designation, r.status, r.restaurant_id, s.name AS restaurant_name,
                  t.legal_name, t.org_number

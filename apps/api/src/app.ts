@@ -2,6 +2,7 @@ import Fastify, { type FastifyServerOptions } from 'fastify';
 import { ControlSystemUnavailableError, type ControlSystem } from '@pos/control-system';
 import { ReceiptError } from '@pos/domain';
 import type { Sql } from 'postgres';
+import { authRoutes } from './auth/routes';
 import { HttpError } from './errors';
 import { menuRoutes } from './menu/routes';
 import { reportRoutes } from './reports/routes';
@@ -40,6 +41,7 @@ export function buildApp(deps: AppDeps, options: FastifyServerOptions = {}) {
     return { status: 'ok', controlSystem };
   });
 
+  authRoutes(app, deps);
   menuRoutes(app, deps);
   salesRoutes(app, deps);
   reportRoutes(app, deps);

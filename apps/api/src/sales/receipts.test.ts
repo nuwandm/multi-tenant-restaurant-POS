@@ -3,7 +3,9 @@ import { FakeControlSystem } from '@pos/control-system';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { testDatabaseUrl } from '../../test/db';
 import {
+  auth,
   createArticle,
+  createSession,
   createTenant,
   insertRegister,
   type TenantFixture,
@@ -34,12 +36,12 @@ afterAll(async () => {
 function postSale(
   fixture: TenantFixture,
   body: object,
-  options: { registerId?: string; tenantId?: string; target?: typeof app } = {},
+  options: { registerId?: string; token?: string; target?: typeof app } = {},
 ) {
   return (options.target ?? app).inject({
     method: 'POST',
     url: `/registers/${options.registerId ?? fixture.registerId}/receipts`,
-    headers: { 'x-tenant-id': options.tenantId ?? fixture.tenantId },
+    headers: auth(options.token ?? fixture.token),
     payload: body,
   });
 }
@@ -159,7 +161,17 @@ describe('POST /registers/:id/receipts', () => {
 
     await postSale(fixture, cardSale(article, 3000));
     await postSale(fixture, cardSale(article, 3000));
-    const res = await postSale(fixture, cardSale(article, 3000), { registerId: second });
+    const secondToken = await createSession(
+      sql,
+      fixture.tenantId,
+      fixture.managerId,
+      second,
+      'manager',
+    );
+    const res = await postSale(fixture, cardSale(article, 3000), {
+      registerId: second,
+      token: secondToken,
+    });
 
     expect(res.json()).toMatchObject({ receiptNumber: 1, register: { designation: 'KASSA-2' } });
     expect(await receiptNumbers(fixture, fixture.registerId)).toEqual([1, 2]);
@@ -219,19 +231,19 @@ describe('POST /registers/:id/receipts', () => {
   });
 
   describe('rejects', () => {
-    it("another tenant's register as not found", async () => {
+    it("a login from another company's register", async () => {
       const other = await createTenant(sql);
-      const res = await postSale(shop, cardSale(wine, 11500), { tenantId: other.tenantId });
-      expect(res.statusCode).toBe(404);
+      const res = await postSale(shop, cardSale(wine, 11500), { token: other.token });
+      expect(res.statusCode).toBe(403);
     });
 
-    it('a request without a tenant', async () => {
+    it('a request without a login', async () => {
       const res = await app.inject({
         method: 'POST',
         url: `/registers/${shop.registerId}/receipts`,
         payload: cardSale(wine, 11500),
       });
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(401);
     });
 
     it('payments that do not match the total', async () => {
@@ -291,7 +303,17 @@ describe('POST /registers/:id/receipts', () => {
       const unenrolled = await withTenant(sql, fixture.tenantId, (tx) =>
         insertRegister(tx, fixture.tenantId, fixture.restaurantId, 'KASSA-X', null),
       );
-      const res = await postSale(fixture, cardSale(article, 9900), { registerId: unenrolled });
+      const token = await createSession(
+        sql,
+        fixture.tenantId,
+        fixture.managerId,
+        unenrolled,
+        'manager',
+      );
+      const res = await postSale(fixture, cardSale(article, 9900), {
+        registerId: unenrolled,
+        token,
+      });
       expect(res.statusCode).toBe(409);
       expect(res.json()).toMatchObject({ error: 'register_not_enrolled' });
     });

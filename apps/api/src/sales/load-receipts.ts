@@ -21,6 +21,8 @@ interface ReceiptRow {
   designation: string;
   legal_name: string;
   org_number: string;
+  cashier_user_id: string | null;
+  cashier_name: string | null;
 }
 
 /** Loads receipts with lines, VAT, payments and returned quantities, in the order of ids. */
@@ -30,10 +32,11 @@ export async function loadReceipts(tx: TransactionSql, ids: string[]): Promise<L
   const rows = await tx<ReceiptRow[]>`
     SELECT r.id, r.kind, r.receipt_number, r.original_receipt_id, r.total_incl_vat_ore,
            r.cash_rounding_ore, r.control_code, r.signed_at, r.created_at, r.register_id,
-           c.designation, t.legal_name, t.org_number
+           c.designation, t.legal_name, t.org_number, r.cashier_user_id, u.display_name AS cashier_name
     FROM receipts r
     JOIN cash_registers c ON c.id = r.register_id
     JOIN tenants t ON t.id = r.tenant_id
+    LEFT JOIN users u ON u.id = r.cashier_user_id
     WHERE r.id IN ${tx(ids)}`;
   const lines = await tx<
     {
@@ -90,6 +93,10 @@ export async function loadReceipts(tx: TransactionSql, ids: string[]): Promise<L
         cashRoundingOre: ore(r.cash_rounding_ore),
         seller: { legalName: r.legal_name, orgNumber: r.org_number },
         register: { id: r.register_id, designation: r.designation },
+        cashier:
+          r.cashier_user_id && r.cashier_name
+            ? { id: r.cashier_user_id, displayName: r.cashier_name }
+            : null,
         lines: lines
           .filter((l) => l.receipt_id === id)
           .map((l) => ({

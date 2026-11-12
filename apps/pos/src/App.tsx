@@ -1,6 +1,15 @@
 import { buildReceipt, ore, type PaymentMethod } from '@pos/domain';
 import { useEffect, useMemo, useState } from 'react';
-import { createReceipt, getHealth, getMenu, type Article, type Menu, type Receipt } from './api';
+import {
+  createReceipt,
+  getHealth,
+  getMenu,
+  isManager,
+  type Article,
+  type Menu,
+  type Receipt,
+  type Staff,
+} from './api';
 import { CashDialog } from './CashDialog';
 import { formatKr } from './format';
 import { ReceiptsDialog } from './ReceiptsDialog';
@@ -14,7 +23,13 @@ interface BasketLine {
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
-export function App() {
+interface Props {
+  staff: Staff;
+  onLogout: () => void;
+}
+
+export function App({ staff, onLogout }: Props) {
+  const manager = isManager(staff);
   const [menu, setMenu] = useState<Menu | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [online, setOnline] = useState<boolean | null>(null);
@@ -147,9 +162,11 @@ export function App() {
             <button type="button" onClick={() => setReport('x')}>
               X-rapport
             </button>
-            <button type="button" onClick={() => setReport('z')}>
-              Z-rapport
-            </button>
+            {manager && (
+              <button type="button" onClick={() => setReport('z')}>
+                Z-rapport
+              </button>
+            )}
           </div>
           <label className="toggle">
             <input
@@ -166,6 +183,12 @@ export function App() {
               : online
                 ? 'Kontrollsystem online'
                 : 'Kontrollsystem offline'}
+          </span>
+          <span className="who">
+            {staff.displayName}
+            <button type="button" className="link" onClick={onLogout} disabled={busy}>
+              Logga ut
+            </button>
           </span>
         </div>
       </header>
@@ -267,6 +290,7 @@ export function App() {
 
       {receiptsOpen && (
         <ReceiptsDialog
+          canReturn={manager}
           onClose={() => setReceiptsOpen(false)}
           onDone={(receipt) => {
             setReceiptsOpen(false);

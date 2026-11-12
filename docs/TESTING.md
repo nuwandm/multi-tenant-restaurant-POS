@@ -20,7 +20,8 @@ Run these in a PowerShell terminal in the project folder.
    - In a second terminal: `powershell -ExecutionPolicy Bypass -File apps/api/db/demo-sale.ps1`
    - You get a printed receipt for Demo Restaurang AB: 332,50 kr, cash rounding 0,50 kr, paid 333 kr cash, and a control code. Run it again and the receipt number goes up by one.
 
-10. **Close the day in the till (http://localhost:5173):**
+10. **Log in and close the day in the till (http://localhost:5173):**
+    - Log in: tap **Anna** (manager, PIN 1234) or **Erik** (cashier, PIN 0000). Five wrong PINs lock that person for 5 minutes. Erik sees no Z-rapport button and cannot make returns.
     - **Kvitton:** pick a sale → **Skriv kopia** prints a receipt marked KOPIA; **Retur…** lets you choose how many of each line to return and how to refund. A line can never be returned twice.
     - **X-rapport:** totals since the last Z report; nothing is closed.
     - **Z-rapport:** closes the period with a Z number. Sell again and take another Z: it only contains the new sales, and the grand totals keep growing.

@@ -13,13 +13,19 @@ $body = @{
   payments = @(@{ method = 'cash'; amountOre = 33300 })                     # 332,50 kr rounds to 333 kr
 } | ConvertTo-Json -Depth 5
 
+# Log in as Erik (cashier, PIN 0000) on the demo register.
+$login = @{ registerId = $register; userId = 'd0000000-0000-0000-0000-000000000f02'; pin = '0000' } | ConvertTo-Json
+$session = Invoke-RestMethod -Method Post -Uri 'http://localhost:3000/auth/login' `
+  -Headers @{ 'x-tenant-id' = $tenant } -ContentType 'application/json' -Body $login
+
 $r = Invoke-RestMethod -Method Post -Uri "http://localhost:3000/registers/$register/receipts" `
-  -Headers @{ 'x-tenant-id' = $tenant } -ContentType 'application/json' -Body $body
+  -Headers @{ Authorization = "Bearer $($session.token)" } -ContentType 'application/json' -Body $body
 
 function Kr($ore) { '{0:N2} kr' -f ($ore / 100) }
 
 "{0}  org.nr {1}" -f $r.seller.legalName, $r.seller.orgNumber
 "Kassa {0}   Kvitto nr {1}   {2}" -f $r.register.designation, $r.receiptNumber, $r.createdAt
+"Kassor: {0}" -f $r.cashier.displayName
 '-' * 48
 foreach ($l in $r.lines) { "{0,3} x {1,-24} {2,12}" -f $l.quantity, $l.name, (Kr $l.lineTotalOre) }
 '-' * 48

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { ControlSystem } from '@pos/control-system';
 import type { BuiltReceipt } from '@pos/domain';
 import type { TransactionSql } from 'postgres';
+import type { StaffSession } from '../auth/session';
 import { receiptTimestamp, type LockedRegister } from './register';
 import { appendJournalEvent, nextValue } from './sequences';
 
@@ -14,6 +15,8 @@ export interface StoredReceipt extends BuiltReceipt {
   originalReceiptId: string | null;
   seller: { legalName: string; orgNumber: string };
   register: { id: string; designation: string };
+  /** Who rang it up. Null only for receipts from before staff login existed. */
+  cashier: { id: string; displayName: string } | null;
 }
 
 /**
@@ -25,11 +28,12 @@ export interface StoredReceipt extends BuiltReceipt {
 export async function storeReceipt(
   tx: TransactionSql,
   controlSystem: ControlSystem,
-  tenantId: string,
+  staff: StaffSession,
   register: LockedRegister,
   built: BuiltReceipt,
   originalReceiptId: string | null = null,
 ): Promise<StoredReceipt> {
+  const { tenantId } = staff;
   const id = randomUUID();
   const createdAt = receiptTimestamp(register);
   const receiptNumber = await nextValue(tx, tenantId, register.id, `receipt:${built.kind}`);
@@ -47,10 +51,11 @@ export async function storeReceipt(
 
   await tx`
     INSERT INTO receipts (id, tenant_id, register_id, kind, receipt_number, original_receipt_id,
-                          total_incl_vat_ore, cash_rounding_ore, control_code, signed_at, created_at)
+                          cashier_user_id, total_incl_vat_ore, cash_rounding_ore, control_code,
+                          signed_at, created_at)
     VALUES (${id}, ${tenantId}, ${register.id}, ${built.kind}, ${receiptNumber}, ${originalReceiptId},
-            ${built.totalOre}, ${built.cashRoundingOre}, ${signed.controlCode}, ${signed.signedAt},
-            ${createdAt})`;
+            ${staff.userId}, ${built.totalOre}, ${built.cashRoundingOre}, ${signed.controlCode},
+            ${signed.signedAt}, ${createdAt})`;
   await tx`
     INSERT INTO receipt_lines ${tx(
       built.lines.map((l) => ({
@@ -108,5 +113,6 @@ export async function storeReceipt(
     originalReceiptId,
     seller: register.seller,
     register: { id: register.id, designation: register.designation },
+    cashier: { id: staff.userId, displayName: staff.displayName },
   };
 }

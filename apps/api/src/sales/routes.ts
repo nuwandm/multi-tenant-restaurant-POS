@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppDeps } from '../app';
-import { registerParams, tenantHeaders, uuid } from '../http-schemas';
+import { requireStaff } from '../auth/session';
+import { registerParams, uuid } from '../http-schemas';
 import {
   createCopy,
   createReceipt,
@@ -27,7 +28,6 @@ const payments = {
 } as const;
 
 const createReceiptSchema = {
-  headers: tenantHeaders,
   params: registerParams,
   body: {
     type: 'object',
@@ -56,7 +56,6 @@ const createReceiptSchema = {
 } as const;
 
 const createReturnSchema = {
-  headers: tenantHeaders,
   params: registerParams,
   body: {
     type: 'object',
@@ -84,7 +83,6 @@ const createReturnSchema = {
 } as const;
 
 const createCopySchema = {
-  headers: tenantHeaders,
   params: registerParams,
   body: {
     type: 'object',
@@ -95,7 +93,6 @@ const createCopySchema = {
 } as const;
 
 const listReceiptsSchema = {
-  headers: tenantHeaders,
   params: registerParams,
   querystring: {
     type: 'object',
@@ -104,55 +101,35 @@ const listReceiptsSchema = {
   },
 } as const;
 
-type RegisterRequest = { Headers: { 'x-tenant-id': string }; Params: { registerId: string } };
+type RegisterRequest = { Params: { registerId: string } };
 
 export function salesRoutes(app: FastifyInstance, deps: AppDeps) {
+  const anyStaff = requireStaff(deps.sql);
+  const managers = requireStaff(deps.sql, ['owner', 'manager']);
+
   app.post<RegisterRequest & { Body: CreateReceiptRequest }>(
     '/registers/:registerId/receipts',
-    { schema: createReceiptSchema },
-    async (req, reply) => {
-      const receipt = await createReceipt(
-        deps,
-        req.headers['x-tenant-id'],
-        req.params.registerId,
-        req.body,
-      );
-      return reply.status(201).send(receipt);
-    },
+    { schema: createReceiptSchema, preHandler: anyStaff },
+    async (req, reply) => reply.status(201).send(await createReceipt(deps, req.staff!, req.body)),
   );
 
   app.get<RegisterRequest & { Querystring: { limit: number } }>(
     '/registers/:registerId/receipts',
-    { schema: listReceiptsSchema },
-    async (req) =>
-      listReceipts(deps, req.headers['x-tenant-id'], req.params.registerId, req.query.limit),
+    { schema: listReceiptsSchema, preHandler: anyStaff },
+    async (req) => listReceipts(deps, req.staff!, req.query.limit),
   );
 
+  // Refunds move money out of the drawer, so only managers and owners can make them.
   app.post<RegisterRequest & { Body: CreateReturnRequest }>(
     '/registers/:registerId/returns',
-    { schema: createReturnSchema },
-    async (req, reply) => {
-      const receipt = await createReturn(
-        deps,
-        req.headers['x-tenant-id'],
-        req.params.registerId,
-        req.body,
-      );
-      return reply.status(201).send(receipt);
-    },
+    { schema: createReturnSchema, preHandler: managers },
+    async (req, reply) => reply.status(201).send(await createReturn(deps, req.staff!, req.body)),
   );
 
   app.post<RegisterRequest & { Body: { originalReceiptId: string } }>(
     '/registers/:registerId/copies',
-    { schema: createCopySchema },
-    async (req, reply) => {
-      const receipt = await createCopy(
-        deps,
-        req.headers['x-tenant-id'],
-        req.params.registerId,
-        req.body.originalReceiptId,
-      );
-      return reply.status(201).send(receipt);
-    },
+    { schema: createCopySchema, preHandler: anyStaff },
+    async (req, reply) =>
+      reply.status(201).send(await createCopy(deps, req.staff!, req.body.originalReceiptId)),
   );
 }

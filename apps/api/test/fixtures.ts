@@ -1,6 +1,8 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { isValidOrgNumber } from '@pos/domain';
 import type { Sql, TransactionSql } from 'postgres';
+import { hashPin } from '../src/auth/pin';
+import { newSessionToken, type Role } from '../src/auth/session';
 import { withTenant } from '../src/db/tenant';
 
 /** A random Luhn-valid org number, so test runs never collide on the unique constraint. */
@@ -16,11 +18,17 @@ export interface TenantFixture {
   tenantId: string;
   restaurantId: string;
   registerId: string;
+  /** A manager, already logged in on registerId. */
+  managerId: string;
+  /** Bearer token of the manager's session. */
+  token: string;
 }
 
+export const auth = (token: string) => ({ authorization: `Bearer ${token}` });
+
 /**
- * Creates a tenant with one restaurant and one register enrolled with the control system,
- * all through the RLS-scoped path.
+ * Creates a tenant with one restaurant, one register enrolled with the control system and a
+ * logged-in manager, all through the RLS-scoped path.
  */
 export async function createTenant(
   sql: Sql,
@@ -28,13 +36,57 @@ export async function createTenant(
   designation = 'KASSA-1',
 ): Promise<TenantFixture> {
   const tenantId = randomUUID();
-  return withTenant(sql, tenantId, async (tx) => {
+  const base = await withTenant(sql, tenantId, async (tx) => {
     await tx`INSERT INTO tenants (id, legal_name, org_number) VALUES (${tenantId}, ${'Restaurang ' + orgNumber}, ${orgNumber})`;
     const [restaurant] = await tx<{ id: string }[]>`
       INSERT INTO restaurants (tenant_id, name) VALUES (${tenantId}, 'Main') RETURNING id`;
     const registerId = await insertRegister(tx, tenantId, restaurant!.id, designation);
     return { tenantId, restaurantId: restaurant!.id, registerId };
   });
+  const managerId = await createStaff(sql, base.tenantId, {
+    name: 'Manager',
+    pin: '1234',
+    role: 'manager',
+  });
+  const token = await createSession(sql, base.tenantId, managerId, base.registerId, 'manager');
+  return { ...base, managerId, token };
+}
+
+/** A staff member with a PIN. Returns the user id. */
+export async function createStaff(
+  sql: Sql,
+  tenantId: string,
+  staff: { name: string; pin: string; role: Role; active?: boolean },
+): Promise<string> {
+  const pinHash = await hashPin(staff.pin);
+  return withTenant(sql, tenantId, async (tx) => {
+    const [user] = await tx<{ id: string }[]>`
+      INSERT INTO users (email, display_name) VALUES (${`${randomUUID()}@test.local`}, ${staff.name})
+      RETURNING id`;
+    await tx`
+      INSERT INTO memberships (tenant_id, user_id, role, pin_hash, active)
+      VALUES (${tenantId}, ${user!.id}, ${staff.role}, ${pinHash}, ${staff.active ?? true})`;
+    return user!.id;
+  });
+}
+
+/** A logged-in session without going through the PIN check. Returns the bearer token. */
+export async function createSession(
+  sql: Sql,
+  tenantId: string,
+  userId: string,
+  registerId: string,
+  role: Role,
+  expiresAt = new Date(Date.now() + 3_600_000),
+): Promise<string> {
+  const { token, tokenHash } = newSessionToken();
+  await withTenant(
+    sql,
+    tenantId,
+    (tx) =>
+      tx`SELECT app_create_session(${tokenHash}, ${userId}, ${registerId}, ${role}, ${expiresAt})`,
+  );
+  return token;
 }
 
 export async function insertRegister(

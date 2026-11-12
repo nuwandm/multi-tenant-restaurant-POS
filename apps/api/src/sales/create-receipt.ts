@@ -8,6 +8,7 @@ import {
   type VatRate,
 } from '@pos/domain';
 import type { Sql, TransactionSql } from 'postgres';
+import type { StaffSession } from '../auth/session';
 import { withTenant } from '../db/tenant';
 import { HttpError } from '../errors';
 import { loadReceipts, type LoadedReceipt } from './load-receipts';
@@ -45,30 +46,28 @@ const toPayments = (payments: PaymentRequest) =>
 /** Sale, training or proforma receipt, priced from the register's menu. */
 export async function createReceipt(
   deps: Deps,
-  tenantId: string,
-  registerId: string,
+  staff: StaffSession,
   request: CreateReceiptRequest,
 ): Promise<StoredReceipt> {
-  return withTenant(deps.sql, tenantId, async (tx) => {
-    const register = await lockRegister(tx, registerId, { forSelling: true });
+  return withTenant(deps.sql, staff.tenantId, async (tx) => {
+    const register = await lockRegister(tx, staff.registerId, { forSelling: true });
     const built = buildReceipt({
       kind: request.kind,
       lines: await priceLines(tx, register.restaurantId, request.lines),
       payments: toPayments(request.payments),
     });
-    return storeReceipt(tx, deps.controlSystem, tenantId, register, built);
+    return storeReceipt(tx, deps.controlSystem, staff, register, built);
   });
 }
 
 /** Return of all or part of a sale, from any register of the same company. */
 export async function createReturn(
   deps: Deps,
-  tenantId: string,
-  registerId: string,
+  staff: StaffSession,
   request: CreateReturnRequest,
 ): Promise<StoredReceipt> {
-  return withTenant(deps.sql, tenantId, async (tx) => {
-    const register = await lockRegister(tx, registerId, { forSelling: true });
+  return withTenant(deps.sql, staff.tenantId, async (tx) => {
+    const register = await lockRegister(tx, staff.registerId, { forSelling: true });
     // Two returns of the same receipt on different registers must not both pass the check.
     await tx`SELECT pg_advisory_xact_lock(hashtextextended(${request.originalReceiptId}, 0))`;
     const original = await loadOriginal(tx, request.originalReceiptId);
@@ -77,41 +76,32 @@ export async function createReturn(
       alreadyReturned: original.returnedQuantities,
       payments: toPayments(request.payments),
     });
-    return storeReceipt(tx, deps.controlSystem, tenantId, register, built, original.id);
+    return storeReceipt(tx, deps.controlSystem, staff, register, built, original.id);
   });
 }
 
 /** Copy of an earlier receipt, numbered in this register's copy series. */
 export async function createCopy(
   deps: Deps,
-  tenantId: string,
-  registerId: string,
+  staff: StaffSession,
   originalReceiptId: string,
 ): Promise<StoredReceipt> {
-  return withTenant(deps.sql, tenantId, async (tx) => {
-    const register = await lockRegister(tx, registerId, { forSelling: true });
+  return withTenant(deps.sql, staff.tenantId, async (tx) => {
+    const register = await lockRegister(tx, staff.registerId, { forSelling: true });
     const original = await loadOriginal(tx, originalReceiptId);
-    return storeReceipt(
-      tx,
-      deps.controlSystem,
-      tenantId,
-      register,
-      buildCopy(original),
-      original.id,
-    );
+    return storeReceipt(tx, deps.controlSystem, staff, register, buildCopy(original), original.id);
   });
 }
 
-/** Most recent receipts on a register, newest first. */
+/** Most recent receipts on the staff member's register, newest first. */
 export async function listReceipts(
   deps: Deps,
-  tenantId: string,
-  registerId: string,
+  staff: StaffSession,
   limit: number,
 ): Promise<LoadedReceipt[]> {
-  return withTenant(deps.sql, tenantId, async (tx) => {
+  return withTenant(deps.sql, staff.tenantId, async (tx) => {
     const ids = await tx<{ id: string }[]>`
-      SELECT id FROM receipts WHERE register_id = ${registerId}
+      SELECT id FROM receipts WHERE register_id = ${staff.registerId}
       ORDER BY created_at DESC, receipt_number DESC LIMIT ${limit}`;
     return loadReceipts(
       tx,

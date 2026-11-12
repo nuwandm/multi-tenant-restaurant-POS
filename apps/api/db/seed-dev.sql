@@ -48,5 +48,19 @@ FROM (VALUES
 ) AS a (id, group_id, name, price_ore, vat_rate)
 ON CONFLICT (id) DO UPDATE SET menu_group_id = EXCLUDED.menu_group_id;
 
+-- Demo staff. PINs: Anna (manager) 1234, Erik (cashier) 0000. Hashes made with apps/api/src/auth/pin.ts.
+INSERT INTO users (id, email, display_name) VALUES
+  ('d0000000-0000-0000-0000-000000000f01', 'anna@demo.local', 'Anna'),
+  ('d0000000-0000-0000-0000-000000000f02', 'erik@demo.local', 'Erik')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO memberships (tenant_id, user_id, role, pin_hash) VALUES
+  ('d0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000f01', 'manager',
+   'scrypt$0a575bb288669e101a019c03d5306e48$fff447774eb3ecb5bfc6768a1abfe03c7e253bc98f1356978c68b70ada7be99f'),
+  ('d0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000f02', 'cashier',
+   'scrypt$13390a46446428ce6c180ac93edfcba0$72de335c70722d3ff26ef507709fea034e34493a4f74b240086dd9f0aedb0174')
+ON CONFLICT (tenant_id, user_id) DO UPDATE SET pin_hash = EXCLUDED.pin_hash, role = EXCLUDED.role;
+
 COMMIT;
 \echo 'Seeded: tenant d0000000-0000-0000-0000-000000000001, register d0000000-0000-0000-0000-0000000000c1'
+\echo 'Staff: Anna (manager) PIN 1234, Erik (cashier) PIN 0000'

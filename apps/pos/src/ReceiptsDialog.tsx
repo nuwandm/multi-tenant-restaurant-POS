@@ -6,6 +6,8 @@ import { formatDateTime, formatKr, PAYMENT_LABELS } from './format';
 interface Props {
   onDone: (receipt: Receipt) => void;
   onClose: () => void;
+  /** Returns need a manager or owner; the API enforces it too. */
+  canReturn: boolean;
 }
 
 export const KIND_LABELS: Record<Receipt['kind'], string> = {
@@ -19,7 +21,7 @@ export const KIND_LABELS: Record<Receipt['kind'], string> = {
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 /** Recent receipts on this register: print a copy, or return all or part of a sale. */
-export function ReceiptsDialog({ onDone, onClose }: Props) {
+export function ReceiptsDialog({ onDone, onClose, canReturn }: Props) {
   const [receipts, setReceipts] = useState<ListedReceipt[] | null>(null);
   const [selected, setSelected] = useState<ListedReceipt | null>(null);
   const [returning, setReturning] = useState(false);
@@ -124,7 +126,8 @@ export function ReceiptsDialog({ onDone, onClose }: Props) {
               <button
                 type="button"
                 className="primary"
-                disabled={busy || selected.kind !== 'sale'}
+                disabled={busy || selected.kind !== 'sale' || !canReturn}
+                title={canReturn ? undefined : 'Endast chef eller ägare'}
                 onClick={() => setReturning(true)}
               >
                 Retur…
