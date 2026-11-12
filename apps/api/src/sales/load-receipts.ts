@@ -44,6 +44,7 @@ export async function loadReceipts(tx: TransactionSql, ids: string[]): Promise<L
       line_no: number;
       article_id: string | null;
       article_name: string;
+      options: string | null;
       quantity: number;
       unit_price_ore: number;
       vat_rate: VatRate;
@@ -103,6 +104,7 @@ export async function loadReceipts(tx: TransactionSql, ids: string[]): Promise<L
             lineNo: l.line_no,
             ...(l.article_id !== null && { articleId: l.article_id }),
             name: l.article_name,
+            ...(l.options !== null && { options: l.options }),
             quantity: l.quantity,
             unitPriceOre: ore(l.unit_price_ore),
             vatRate: l.vat_rate,

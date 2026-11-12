@@ -8,6 +8,7 @@ import { HttpError } from './errors';
 import { ConsoleMailer, type Mailer } from './mail/mailer';
 import { menuRoutes } from './menu/routes';
 import { reportRoutes } from './reports/routes';
+import { orderRoutes } from './sales/order-routes';
 import { salesRoutes } from './sales/routes';
 
 export interface AppDeps {
@@ -58,6 +59,7 @@ export function buildApp(
   adminRoutes(app, deps);
   menuRoutes(app, deps);
   salesRoutes(app, deps);
+  orderRoutes(app, deps);
   reportRoutes(app, deps);
 
   return app;

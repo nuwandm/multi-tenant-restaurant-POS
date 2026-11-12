@@ -14,6 +14,7 @@ const integer = { type: 'integer' } as const;
 const name = { type: 'string', minLength: 1, maxLength: 100 } as const;
 const vatRate = { enum: [25, 12, 6, 0] } as const;
 const role = { enum: ['owner', 'manager', 'cashier'] } as const;
+const station = { anyOf: [{ enum: ['kitchen', 'bar'] }, { type: 'null' }] } as const;
 const pin = { type: 'string', pattern: '^[0-9]{4,8}$' } as const;
 const password = { type: 'string', minLength: MIN_PASSWORD_LENGTH, maxLength: 200 } as const;
 
@@ -61,6 +62,10 @@ export function tenantAdminRoutes(app: FastifyInstance, deps: AppDeps) {
       inTenant(deps, req.adminTenant!, async (tx) => {
         const restaurants = await tx<{ id: string; name: string; address: string | null }[]>`
         SELECT id, name, address FROM restaurants ORDER BY name`;
+        const tables = await tx<
+          { id: string; restaurant_id: string; name: string; active: boolean; sort_order: number }[]
+        >`SELECT id, restaurant_id, name, active, sort_order FROM dining_tables
+        ORDER BY sort_order, name`;
         const registers = await tx<
           {
             id: string;
@@ -91,6 +96,9 @@ export function tenantAdminRoutes(app: FastifyInstance, deps: AppDeps) {
             : null,
           restaurants: restaurants.map((r) => ({
             ...r,
+            tables: tables
+              .filter((tb) => tb.restaurant_id === r.id)
+              .map((tb) => ({ id: tb.id, name: tb.name, active: tb.active })),
             registers: registers
               .filter((c) => c.restaurant_id === r.id)
               .map((c) => ({
@@ -252,9 +260,15 @@ export function tenantAdminRoutes(app: FastifyInstance, deps: AppDeps) {
             vat_rate: VatRate;
             menu_group_id: string | null;
             active: boolean;
+            station: 'kitchen' | 'bar' | null;
+            option_group_ids: string[];
           }[]
-        >`SELECT id, name, price_ore, vat_rate, menu_group_id, active FROM articles
-          WHERE restaurant_id = ${req.params.restaurantId} ORDER BY name`;
+        >`SELECT a.id, a.name, a.price_ore, a.vat_rate, a.menu_group_id, a.active, a.station,
+                 coalesce(array_agg(aog.group_id ORDER BY aog.sort_order)
+                          FILTER (WHERE aog.group_id IS NOT NULL), '{}') AS option_group_ids
+          FROM articles a LEFT JOIN article_option_groups aog ON aog.article_id = a.id
+          WHERE a.restaurant_id = ${req.params.restaurantId}
+          GROUP BY a.id ORDER BY a.name`;
         return {
           groups: groups.map((g) => ({
             id: g.id,
@@ -269,6 +283,8 @@ export function tenantAdminRoutes(app: FastifyInstance, deps: AppDeps) {
             vatRate: a.vat_rate,
             menuGroupId: a.menu_group_id,
             active: a.active,
+            station: a.station,
+            optionGroupIds: a.option_group_ids,
           })),
         };
       }),
@@ -329,7 +345,13 @@ export function tenantAdminRoutes(app: FastifyInstance, deps: AppDeps) {
 
   app.post<{
     Params: P<'restaurantId'>;
-    Body: { name: string; priceOre: number; vatRate: VatRate; menuGroupId?: string | null };
+    Body: {
+      name: string;
+      priceOre: number;
+      vatRate: VatRate;
+      menuGroupId?: string | null;
+      station?: 'kitchen' | 'bar' | null;
+    };
   }>(
     `${base}/restaurants/:restaurantId/articles`,
     {
@@ -342,6 +364,7 @@ export function tenantAdminRoutes(app: FastifyInstance, deps: AppDeps) {
             priceOre: { ...integer, minimum: 0, maximum: 10_000_000 },
             vatRate,
             menuGroupId: { anyOf: [uuid, { type: 'null' }] },
+            station,
           },
           ['name', 'priceOre', 'vatRate'],
         ),
@@ -349,14 +372,14 @@ export function tenantAdminRoutes(app: FastifyInstance, deps: AppDeps) {
     },
     async (req, reply) => {
       const ctx = req.adminTenant!;
-      const { name: articleName, priceOre, vatRate: rate, menuGroupId } = req.body;
+      const { name: articleName, priceOre, vatRate: rate, menuGroupId, station: where } = req.body;
       const created = await inTenant(deps, ctx, async (tx) => {
         await assertRestaurant(tx, req.params.restaurantId);
         if (menuGroupId) await assertGroupInRestaurant(tx, menuGroupId, req.params.restaurantId);
         const [row] = await tx<{ id: string }[]>`
-          INSERT INTO articles (tenant_id, restaurant_id, menu_group_id, name, price_ore, vat_rate)
+          INSERT INTO articles (tenant_id, restaurant_id, menu_group_id, name, price_ore, vat_rate, station)
           VALUES (${ctx.tenantId}, ${req.params.restaurantId}, ${menuGroupId ?? null},
-                  ${articleName.trim()}, ${priceOre}, ${rate})
+                  ${articleName.trim()}, ${priceOre}, ${rate}, ${where ?? null})
           RETURNING id`;
         await audit(tx, ctx, 'article.create', row!.id, {
           name: articleName,
@@ -378,6 +401,7 @@ export function tenantAdminRoutes(app: FastifyInstance, deps: AppDeps) {
       vatRate?: VatRate;
       menuGroupId?: string | null;
       active?: boolean;
+      station?: 'kitchen' | 'bar' | null;
     };
   }>(
     `${base}/articles/:articleId`,
@@ -391,6 +415,7 @@ export function tenantAdminRoutes(app: FastifyInstance, deps: AppDeps) {
           vatRate,
           menuGroupId: { anyOf: [uuid, { type: 'null' }] },
           active: { type: 'boolean' },
+          station,
         }),
       },
     },
@@ -410,7 +435,9 @@ export function tenantAdminRoutes(app: FastifyInstance, deps: AppDeps) {
             vat_rate = coalesce(${b.vatRate ?? null}::smallint, vat_rate),
             menu_group_id = CASE WHEN ${'menuGroupId' in b}::boolean THEN ${b.menuGroupId ?? null}::uuid
                                  ELSE menu_group_id END,
-            active = coalesce(${b.active ?? null}::boolean, active)
+            active = coalesce(${b.active ?? null}::boolean, active),
+            station = CASE WHEN ${'station' in b}::boolean THEN ${b.station ?? null}::text
+                           ELSE station END
           WHERE id = ${req.params.articleId}`;
         await audit(tx, ctx, 'article.update', req.params.articleId, b);
         return { id: req.params.articleId };

@@ -4,24 +4,32 @@ import {
   Card,
   Center,
   Group,
+  MultiSelect,
   Select,
   Stack,
   Switch,
   Table,
+  Tabs,
   Text,
   TextInput,
   ThemeIcon,
   UnstyledButton,
 } from '@mantine/core';
-import { IconPlus, IconToolsKitchen2 } from '@tabler/icons-react';
+import {
+  IconAdjustmentsHorizontal,
+  IconList,
+  IconPlus,
+  IconToolsKitchen2,
+} from '@tabler/icons-react';
 import type { VatRate } from '@pos/domain';
 import { useEffect, useState, type FormEvent } from 'react';
-import { api, type Article, type MenuGroup } from '../api';
+import { api, type Article, type MenuGroup, type OptionGroup, type Station } from '../api';
 import { formatKr, parseKr } from '../format';
 import { useT } from '../i18n';
 import { notifyOk } from '../notify';
 import { PageHeader } from '../PageHeader';
 import { useAction, useLoad } from '../useLoad';
+import { OptionGroupsSection } from './OptionGroupsSection';
 import { TableSkeleton } from './TableSkeleton';
 
 const VAT_OPTIONS: { rate: VatRate; label: string }[] = [
@@ -29,6 +37,12 @@ const VAT_OPTIONS: { rate: VatRate; label: string }[] = [
   { rate: 25, label: '25% (alcohol)' },
   { rate: 6, label: '6%' },
   { rate: 0, label: '0%' },
+];
+
+const STATION_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: 'No ticket' },
+  { value: 'kitchen', label: 'Kitchen' },
+  { value: 'bar', label: 'Bar' },
 ];
 
 /** Menu per restaurant. Changes reach the tills at once; old receipts keep their prices. */
@@ -77,6 +91,7 @@ function MenuEditor({ tenantId, restaurantId }: { tenantId: string; restaurantId
     () => api.menu(tenantId, restaurantId),
     [tenantId, restaurantId],
   );
+  const options = useLoad(() => api.optionGroups(tenantId, restaurantId), [tenantId, restaurantId]);
   const action = useAction({ toast: true });
   const [groupName, setGroupName] = useState('');
 
@@ -96,6 +111,7 @@ function MenuEditor({ tenantId, restaurantId }: { tenantId: string; restaurantId
     if (await action.run(fn)) {
       notifyOk(t('Saved'));
       reload();
+      options.reload();
     }
   };
 
@@ -141,103 +157,134 @@ function MenuEditor({ tenantId, restaurantId }: { tenantId: string; restaurantId
     );
   }
 
-  return (
-    <Stack gap="lg">
-      {sections
-        .filter((s) => s.group || s.articles.length > 0)
-        .map(({ group, articles }) => (
-          <Card
-            key={group?.id ?? 'none'}
-            withBorder
-            radius="lg"
-            padding={0}
-            opacity={group && !group.active ? 0.6 : 1}
-          >
-            <Group justify="space-between" p="lg" pb="sm">
-              <Group gap="sm">
-                {group ? (
-                  <InlineText
-                    value={group.name}
-                    fw={650}
-                    fz="lg"
-                    onSave={(name) => save(() => api.updateGroup(tenantId, group.id, { name }))}
-                  />
-                ) : (
-                  <Text fw={650} fz="lg" c="dimmed">
-                    {t('No group')}
-                  </Text>
-                )}
-                <Badge variant="default" radius="sm">
-                  {articles.length}
-                </Badge>
-              </Group>
-              {group && (
-                <Switch
-                  label={t('Shown at the till')}
-                  labelPosition="left"
-                  checked={group.active}
-                  onChange={(e) =>
-                    save(() =>
-                      api.updateGroup(tenantId, group.id, { active: e.currentTarget.checked }),
-                    )
-                  }
-                />
-              )}
-            </Group>
+  const optionGroups = options.data ?? [];
 
-            <Table.ScrollContainer minWidth={680}>
-              <Table verticalSpacing="xs" horizontalSpacing="lg" highlightOnHover>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>{t('Item')}</Table.Th>
-                    <Table.Th ta="right" w={130}>
-                      {t('Price')}
-                    </Table.Th>
-                    <Table.Th w={160}>{t('VAT')}</Table.Th>
-                    <Table.Th w={180}>{t('Group')}</Table.Th>
-                    <Table.Th w={110} ta="center">
-                      {t('At the till')}
-                    </Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {articles.map((a) => (
-                    <ArticleRow
-                      key={a.id}
-                      article={a}
-                      groups={data.groups}
-                      tenantId={tenantId}
-                      save={save}
+  return (
+    <Tabs defaultValue="items" keepMounted={false}>
+      <Tabs.List mb="lg">
+        <Tabs.Tab value="items" leftSection={<IconList size={16} />}>
+          {t('Items')}
+        </Tabs.Tab>
+        <Tabs.Tab value="options" leftSection={<IconAdjustmentsHorizontal size={16} />}>
+          {t('Options')}
+          {optionGroups.length > 0 && (
+            <Badge ml={6} size="sm" variant="default">
+              {optionGroups.length}
+            </Badge>
+          )}
+        </Tabs.Tab>
+      </Tabs.List>
+      <Tabs.Panel value="options">
+        <OptionGroupsSection
+          tenantId={tenantId}
+          restaurantId={restaurantId}
+          groups={optionGroups}
+          save={save}
+          reload={options.reload}
+        />
+      </Tabs.Panel>
+      <Tabs.Panel value="items">
+        <Stack gap="lg">
+          {sections
+            .filter((s) => s.group || s.articles.length > 0)
+            .map(({ group, articles }) => (
+              <Card
+                key={group?.id ?? 'none'}
+                withBorder
+                radius="lg"
+                padding={0}
+                opacity={group && !group.active ? 0.6 : 1}
+              >
+                <Group justify="space-between" p="lg" pb="sm">
+                  <Group gap="sm">
+                    {group ? (
+                      <InlineText
+                        value={group.name}
+                        fw={650}
+                        fz="lg"
+                        onSave={(name) => save(() => api.updateGroup(tenantId, group.id, { name }))}
+                      />
+                    ) : (
+                      <Text fw={650} fz="lg" c="dimmed">
+                        {t('No group')}
+                      </Text>
+                    )}
+                    <Badge variant="default" radius="sm">
+                      {articles.length}
+                    </Badge>
+                  </Group>
+                  {group && (
+                    <Switch
+                      label={t('Shown at the till')}
+                      labelPosition="left"
+                      checked={group.active}
+                      onChange={(e) =>
+                        save(() =>
+                          api.updateGroup(tenantId, group.id, { active: e.currentTarget.checked }),
+                        )
+                      }
                     />
-                  ))}
-                  {articles.length === 0 && (
-                    <Table.Tr>
-                      <Table.Td colSpan={5}>
-                        <Text fz="sm" c="dimmed">
-                          {t('No items.')}
-                        </Text>
-                      </Table.Td>
-                    </Table.Tr>
                   )}
-                </Table.Tbody>
-              </Table>
-            </Table.ScrollContainer>
-            <NewArticleForm
-              groupId={group?.id ?? null}
-              onAdd={(body) => save(() => api.addArticle(tenantId, restaurantId, body))}
+                </Group>
+
+                <Table.ScrollContainer minWidth={980}>
+                  <Table verticalSpacing="xs" horizontalSpacing="lg" highlightOnHover>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>{t('Item')}</Table.Th>
+                        <Table.Th ta="right" w={130}>
+                          {t('Price')}
+                        </Table.Th>
+                        <Table.Th w={160}>{t('VAT')}</Table.Th>
+                        <Table.Th w={170}>{t('Group')}</Table.Th>
+                        <Table.Th w={130}>{t('Ticket')}</Table.Th>
+                        <Table.Th w={210}>{t('Options')}</Table.Th>
+                        <Table.Th w={110} ta="center">
+                          {t('At the till')}
+                        </Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {articles.map((a) => (
+                        <ArticleRow
+                          key={a.id}
+                          article={a}
+                          groups={data.groups}
+                          optionGroups={optionGroups}
+                          tenantId={tenantId}
+                          save={save}
+                        />
+                      ))}
+                      {articles.length === 0 && (
+                        <Table.Tr>
+                          <Table.Td colSpan={7}>
+                            <Text fz="sm" c="dimmed">
+                              {t('No items.')}
+                            </Text>
+                          </Table.Td>
+                        </Table.Tr>
+                      )}
+                    </Table.Tbody>
+                  </Table>
+                </Table.ScrollContainer>
+                <NewArticleForm
+                  groupId={group?.id ?? null}
+                  onAdd={(body) => save(() => api.addArticle(tenantId, restaurantId, body))}
+                />
+              </Card>
+            ))}
+
+          <Card withBorder radius="lg" p="lg" style={{ borderStyle: 'dashed' }}>
+            <NewGroupForm
+              value={groupName}
+              onChange={setGroupName}
+              onSubmit={addGroup}
+              busy={action.busy}
             />
           </Card>
-        ))}
-
-      <Card withBorder radius="lg" p="lg" style={{ borderStyle: 'dashed' }}>
-        <NewGroupForm
-          value={groupName}
-          onChange={setGroupName}
-          onSubmit={addGroup}
-          busy={action.busy}
-        />
-      </Card>
-    </Stack>
+        </Stack>
+      </Tabs.Panel>
+    </Tabs>
   );
 }
 
@@ -274,11 +321,13 @@ function NewGroupForm({
 function ArticleRow({
   article,
   groups,
+  optionGroups,
   tenantId,
   save,
 }: {
   article: Article;
   groups: MenuGroup[];
+  optionGroups: OptionGroup[];
   tenantId: string;
   save: (fn: () => Promise<unknown>) => Promise<void>;
 }) {
@@ -320,6 +369,32 @@ function ArticleRow({
         />
       </Table.Td>
       <Table.Td>
+        <Select
+          size="xs"
+          allowDeselect={false}
+          value={article.station ?? ''}
+          onChange={(v) => update({ station: (v || null) as Station | null })}
+          data={STATION_OPTIONS.map((o) => ({ value: o.value, label: t(o.label) }))}
+        />
+      </Table.Td>
+      <Table.Td>
+        <MultiSelect
+          size="xs"
+          placeholder={article.optionGroupIds.length === 0 ? t('None') : undefined}
+          value={article.optionGroupIds}
+          onChange={(ids) => save(() => api.setArticleOptionGroups(tenantId, article.id, ids))}
+          data={optionGroups.map((g) => ({
+            value: g.id,
+            label: g.name,
+            disabled: !g.active && !article.optionGroupIds.includes(g.id),
+          }))}
+          nothingFoundMessage={t('Make option groups on the Options tab.')}
+          clearable={false}
+          hidePickedOptions
+          comboboxProps={{ withinPortal: true }}
+        />
+      </Table.Td>
+      <Table.Td>
         <Center>
           <Switch
             aria-label={t('Shown at the till')}
@@ -342,18 +417,20 @@ function NewArticleForm({
     priceOre: number;
     vatRate: VatRate;
     menuGroupId: string | null;
+    station: Station | null;
   }) => Promise<void>;
 }) {
   const t = useT();
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [vatRate, setVatRate] = useState<VatRate>(12);
+  const [station, setStation] = useState<Station | null>('kitchen');
   const priceOre = parseKr(price);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (priceOre === null) return;
-    await onAdd({ name, priceOre, vatRate, menuGroupId: groupId });
+    await onAdd({ name, priceOre, vatRate, menuGroupId: groupId, station });
     setName('');
     setPrice('');
   }
@@ -386,6 +463,15 @@ function NewArticleForm({
           onChange={(v) => v && setVatRate(Number(v) as VatRate)}
           data={VAT_OPTIONS.map((o) => ({ value: String(o.rate), label: t(o.label) }))}
           w={150}
+        />
+        <Select
+          size="xs"
+          aria-label={t('Ticket')}
+          allowDeselect={false}
+          value={station ?? ''}
+          onChange={(v) => setStation((v || null) as Station | null)}
+          data={STATION_OPTIONS.map((o) => ({ value: o.value, label: t(o.label) }))}
+          w={130}
         />
         <Button
           type="submit"

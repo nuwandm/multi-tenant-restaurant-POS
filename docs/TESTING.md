@@ -33,6 +33,14 @@ Run these in a PowerShell terminal in the project folder.
     - **As a new owner:** log out → **Registrera ditt företag**. The company is _pending_: set up menu, staff and a register, then approve it as the platform admin.
     - Create your own platform admin: `pnpm platform:admin you@example.com "Your Name"` prints a one-time password.
 
+12. **Restaurant features (run `pnpm db:migrate` first):**
+    - **Set up (back office as Anna):** **Restaurants & registers** → add tables (1, 2, Terrace 1). **Menu** → **Options** tab → add a group _Size_ (min 1, max 1) with _Small_ (0) and _Large_ (+15), and _Extras_ (min 0, max 3) with _Bacon_ (+12). On the **Items** tab, link them to a dish and set **Ticket** to Kitchen for food and Bar for drinks.
+    - **Options:** at the till, tap that dish: you must pick a size before **Add** works. The line shows the choices and the price includes the extras.
+    - **Discounts:** tap a line → discount in kr or %. The % button above the total gives a discount on the whole order. The receipt shows the discount and the VAT is still right.
+    - **Tables:** **Tables** → pick a table → add items → **Send to kitchen**. Open the **Kitchen display** (user menu) on another tab: a ticket for the table appears, bar items get their own ticket. Tap a ticket to mark it done.
+    - **Split bill:** with a table open, **Split** → _By items_ to pay part of the order (the rest stays on the table), or _By amount_ to pay with card plus cash. Pay the last part and the table becomes free.
+    - **Reports:** back office → **Sales** shows totals, sales per day and hour, payment methods, best sellers and VAT for today, 7 days, 30 days or this month.
+
 After the first time, `pnpm db:up` and `pnpm test` are enough.
 
 ## Troubleshooting

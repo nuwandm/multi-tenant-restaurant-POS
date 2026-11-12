@@ -1,6 +1,7 @@
 import '@fontsource-variable/geist';
 import '@fontsource-variable/geist-mono';
 import '@mantine/core/styles.css';
+import '@mantine/charts/styles.css';
 import '@mantine/notifications/styles.css';
 import './design.css';
 import './app.css';

@@ -71,6 +71,7 @@ export async function storeReceipt(
         discount_ore: l.discountOre,
         line_total_ore: l.lineTotalOre,
         original_line_no: l.originalLineNo ?? null,
+        options: l.options ?? null,
       })),
     )}`;
   await tx`

@@ -21,9 +21,12 @@ import {
   Tooltip,
   UnstyledButton,
 } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import {
   IconAlertCircle,
+  IconArmchair,
   IconCash,
+  IconChefHat,
   IconChevronDown,
   IconCreditCard,
   IconDeviceMobile,
@@ -31,41 +34,76 @@ import {
   IconLock,
   IconLogout,
   IconMinus,
+  IconPercentage,
   IconPlus,
   IconReceipt,
   IconSchool,
   IconSearch,
+  IconSend,
   IconShoppingBag,
   IconToolsKitchen2,
+  IconUsersGroup,
   IconX,
 } from '@tabler/icons-react';
-import { buildReceipt, ore, type PaymentMethod } from '@pos/domain';
+import {
+  buildReceipt,
+  ore,
+  roundToKrona,
+  type BuiltReceipt,
+  type PaymentMethod,
+} from '@pos/domain';
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
+  cancelOpenOrder,
+  createOpenOrder,
   createReceipt,
   getHealth,
   getMenu,
   isManager,
+  listOpenOrders,
   newAttemptKey,
+  sendOpenOrder,
+  updateOpenOrder,
   type Article,
   type DeviceInfo,
+  type DiningTable,
   type Menu,
+  type OpenOrder,
   type Receipt,
   type Staff,
 } from './api';
+import {
+  addLine,
+  fromOrderLine,
+  lineGross,
+  toBasketLine,
+  toRequest,
+  type BasketLine,
+} from './basket';
 import { Brand } from './Brand';
 import { CashDialog } from './CashDialog';
 import { formatKr } from './format';
 import { ColorSchemeToggle, LanguageToggle, useT } from './i18n';
+import { KitchenView } from './KitchenView';
+import { LineDialog } from './LineDialog';
 import { ROLE_LABELS } from './LoginScreen';
+import { OptionsDialog } from './OptionsDialog';
+import { OrderDiscountDialog } from './OrderDiscountDialog';
 import { avatarColor, initials } from './people';
 import { ReceiptsDialog } from './ReceiptsDialog';
 import { ReceiptView } from './ReceiptView';
 import { ReportDialog } from './ReportDialog';
+import { SplitDialog } from './SplitDialog';
+import { TablesDialog } from './TablesDialog';
 
-interface BasketLine {
-  article: Article;
-  quantity: number;
+type Payment = { method: PaymentMethod; amountOre: number };
+
+/** The table order on screen: saved on the server as it changes. */
+interface ActiveOrder {
+  id: string;
+  version: number;
+  tableId: string | null;
+  tableName: string | null;
 }
 
 /** Each menu group gets its own accent, so staff find items by colour as well as name. */
@@ -74,6 +112,37 @@ const accentOf = (groupIndex: number) =>
   `var(--mantine-color-${GROUP_ACCENTS[groupIndex % GROUP_ACCENTS.length]}-5)`;
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+/** Totals with the same logic the API uses. Null while the order is empty or invalid. */
+function previewOf(lines: BasketLine[], orderDiscountOre: number): BuiltReceipt | null {
+  if (lines.length === 0) return null;
+  try {
+    return buildReceipt({
+      kind: 'proforma',
+      lines: lines.map((l) => ({
+        articleId: l.articleId,
+        name: l.name,
+        quantity: l.quantity,
+        unitPriceOre: ore(l.unitPriceOre),
+        vatRate: l.vatRate,
+        discountOre: ore(Math.min(l.discountOre, lineGross(l))),
+      })),
+      ...(orderDiscountOre > 0 && { orderDiscountOre: ore(orderDiscountOre) }),
+      payments: [],
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** Part of the order for a split: the chosen quantities, with their share of line discounts. */
+function subsetOf(lines: BasketLine[], quantities: Record<string, number>): BasketLine[] {
+  return lines.flatMap((l) => {
+    const n = quantities[l.key] ?? 0;
+    if (n <= 0) return [];
+    return [{ ...l, quantity: n, discountOre: Math.round((l.discountOre * n) / l.quantity) }];
+  });
+}
 
 interface Props {
   staff: Staff;
@@ -93,13 +162,27 @@ export function App({ staff, device, onLogout }: Props) {
   const [groupIndex, setGroupIndex] = useState(0);
   const [search, setSearch] = useState('');
   const [basket, setBasket] = useState<BasketLine[]>([]);
+  const [orderDiscount, setOrderDiscount] = useState(0);
+  const [order, setOrder] = useState<ActiveOrder | null>(null);
+  const [saving, setSaving] = useState(false);
   const [training, setTraining] = useState(trainingOnly);
-  const [cashOpen, setCashOpen] = useState(false);
-  const [busy, setBusy] = useState<PaymentMethod | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ receipt: Receipt; changeOre: number } | null>(null);
-  const [receiptsOpen, setReceiptsOpen] = useState(false);
-  const [report, setReport] = useState<'x' | 'z' | null>(null);
+  const [dialog, setDialog] = useState<
+    | { kind: 'cash' }
+    | { kind: 'receipts' }
+    | { kind: 'report'; type: 'x' | 'z' }
+    | { kind: 'options'; article: Article }
+    | { kind: 'line'; key: string }
+    | { kind: 'discount' }
+    | { kind: 'split' }
+    | { kind: 'tables' }
+    | null
+  >(null);
+  const [kitchen, setKitchen] = useState(false);
+  // Set when the basket was just loaded from the server, so that load isn't saved back.
+  const fromServer = useRef(false);
 
   useEffect(() => {
     getMenu()
@@ -117,51 +200,157 @@ export function App({ staff, device, onLogout }: Props) {
     return () => clearInterval(timer);
   }, []);
 
-  // Live totals with the same domain logic the API uses; the API recomputes from its own prices.
-  const preview = useMemo(
-    () =>
-      basket.length === 0
-        ? null
-        : buildReceipt({
-            kind: 'proforma',
-            lines: basket.map((l) => ({
-              articleId: l.article.id,
-              name: l.article.name,
-              quantity: l.quantity,
-              unitPriceOre: ore(l.article.priceOre),
-              vatRate: l.article.vatRate,
+  // A table order is saved shortly after each change, so every till sees the same order.
+  useEffect(() => {
+    if (!order) return;
+    if (fromServer.current) {
+      fromServer.current = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      setSaving(true);
+      updateOpenOrder(order.id, {
+        lines: toRequest(basket),
+        orderDiscountOre: orderDiscount,
+        version: order.version,
+      })
+        .then((saved) => {
+          setOrder((o) => (o && o.id === saved.id ? { ...o, version: saved.version } : o));
+          // Keep what the kitchen has already received in sync.
+          setBasket((lines) =>
+            lines.map((l) => ({
+              ...l,
+              sentQuantity: saved.lines.find((s) => s.key === l.key)?.sentQuantity ?? 0,
             })),
-            payments: [],
-          }),
-    [basket],
-  );
+          );
+          fromServer.current = true;
+        })
+        .catch(async (err: unknown) => {
+          setError(message(err));
+          await reloadOrder(order.id);
+        })
+        .finally(() => setSaving(false));
+    }, 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [basket, orderDiscount]);
 
-  function add(article: Article) {
-    setError(null);
-    setBasket((lines) =>
-      lines.some((l) => l.article.id === article.id)
-        ? lines.map((l) => (l.article.id === article.id ? { ...l, quantity: l.quantity + 1 } : l))
-        : [...lines, { article, quantity: 1 }],
-    );
+  const preview = useMemo(() => previewOf(basket, orderDiscount), [basket, orderDiscount]);
+
+  function showOrder(o: OpenOrder) {
+    fromServer.current = true;
+    setOrder({ id: o.id, version: o.version, tableId: o.tableId, tableName: o.tableName });
+    setBasket(o.lines.map(fromOrderLine));
+    setOrderDiscount(o.orderDiscountOre);
   }
 
-  function changeQuantity(articleId: string, delta: number) {
+  function leaveOrder() {
+    fromServer.current = true;
+    setOrder(null);
+    setBasket([]);
+    setOrderDiscount(0);
+  }
+
+  async function reloadOrder(id: string) {
+    const fresh = (await listOpenOrders().catch(() => [])).find((o) => o.id === id);
+    if (fresh) showOrder(fresh);
+    else leaveOrder();
+  }
+
+  function add(article: Article, optionIds: string[] = []) {
+    setError(null);
+    setBasket((lines) => addLine(lines, toBasketLine(article, optionIds)));
+  }
+
+  function tapItem(article: Article) {
+    if (article.optionGroups.length > 0) setDialog({ kind: 'options', article });
+    else add(article);
+  }
+
+  function changeQuantity(key: string, delta: number) {
     setBasket((lines) =>
       lines.flatMap((l) => {
-        if (l.article.id !== articleId) return [l];
+        if (l.key !== key) return [l];
         const quantity = l.quantity + delta;
-        return quantity > 0 ? [{ ...l, quantity }] : [];
+        if (quantity < Math.max(1, l.sentQuantity))
+          return quantity <= 0 && l.sentQuantity === 0 ? [] : [l];
+        return [
+          { ...l, quantity, discountOre: Math.min(l.discountOre, quantity * l.unitPriceOre) },
+        ];
       }),
     );
   }
 
-  async function pay(method: PaymentMethod, amountOre: number, changeOre = 0) {
-    setBusy(method);
+  /** Opens a table: its existing order, or a new one that takes over what's on screen now. */
+  async function openTable(table: DiningTable, existing: OpenOrder | null) {
+    setDialog(null);
     setError(null);
+    if (existing) {
+      if (order?.id !== existing.id) showOrder(existing);
+      return;
+    }
+    try {
+      setBusy('table');
+      const created = await createOpenOrder({
+        tableId: table.id,
+        lines: order ? [] : toRequest(basket),
+        orderDiscountOre: order ? 0 : orderDiscount,
+      });
+      showOrder(created);
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** Leaves the table order (it stays open on the table). An empty order is cancelled. */
+  async function closeTable() {
+    if (!order) return;
+    if (basket.length === 0) await cancelOpenOrder(order.id).catch(() => {});
+    leaveOrder();
+  }
+
+  async function sendToKitchen() {
+    if (!order) return;
+    setBusy('send');
+    try {
+      // Save first, so the kitchen gets exactly what's on screen.
+      const saved = await updateOpenOrder(order.id, {
+        lines: toRequest(basket),
+        orderDiscountOre: orderDiscount,
+        version: order.version,
+      });
+      const result = await sendOpenOrder(saved.id);
+      showOrder(result.order);
+      notifications.show({
+        color: 'brand',
+        icon: <IconChefHat size={18} />,
+        message: t('Sent to the kitchen'),
+        autoClose: 2000,
+      });
+    } catch (err) {
+      setError(message(err));
+      await reloadOrder(order.id);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** Makes the receipt. `subset` pays only part of the order (split by items). */
+  async function charge(
+    payments: Payment[],
+    opts: { subset?: BasketLine[]; changeOre?: number; busyKey: string },
+  ) {
+    setBusy(opts.busyKey);
+    setError(null);
+    const lines = opts.subset ?? basket;
     const body = {
       kind: training ? ('training' as const) : ('sale' as const),
-      lines: basket.map((l) => ({ articleId: l.article.id, quantity: l.quantity })),
-      payments: [{ method, amountOre }],
+      lines: toRequest(lines),
+      ...(!opts.subset && orderDiscount > 0 && { orderDiscountOre: orderDiscount }),
+      payments,
+      ...(order && { openOrderId: order.id }),
     };
     // Tapping pay again for the same order after a lost connection reuses the key, so the
     // API returns the receipt it already made instead of charging twice.
@@ -170,23 +359,47 @@ export function App({ staff, device, onLogout }: Props) {
       attempt.current = { signature, key: newAttemptKey() };
     }
     try {
+      if (order) {
+        // The server takes the paid lines off the saved order, so save pending changes first.
+        const saved = await updateOpenOrder(order.id, {
+          lines: toRequest(basket),
+          orderDiscountOre: orderDiscount,
+          version: order.version,
+        });
+        setOrder((o) => (o ? { ...o, version: saved.version } : o));
+      }
       const receipt = await createReceipt(body, attempt.current.key);
       attempt.current = null;
-      setCashOpen(false);
-      setDone({ receipt, changeOre });
+      setDialog(null);
+      setDone({ receipt, changeOre: opts.changeOre ?? 0 });
+      if (order) await reloadOrder(order.id);
+      else if (opts.subset) {
+        const paid = new Map(opts.subset.map((l) => [l.key, l]));
+        fromServer.current = true;
+        setBasket((all) =>
+          all.flatMap((l) => {
+            const p = paid.get(l.key);
+            if (!p) return [l];
+            const quantity = l.quantity - p.quantity;
+            return quantity > 0
+              ? [{ ...l, quantity, discountOre: l.discountOre - p.discountOre }]
+              : [];
+          }),
+        );
+      } else {
+        fromServer.current = true;
+        setBasket([]);
+        setOrderDiscount(0);
+      }
     } catch (err) {
-      setCashOpen(false);
+      setDialog(null);
       setError(message(err));
     } finally {
       setBusy(null);
     }
   }
 
-  function newSale() {
-    // Copies and returns are made from the receipts dialog and leave an open order alone.
-    if (done?.receipt.kind === 'sale' || done?.receipt.kind === 'training') setBasket([]);
-    setDone(null);
-  }
+  if (kitchen) return <KitchenView onExit={() => setKitchen(false)} />;
 
   if (loadError) {
     return (
@@ -215,10 +428,14 @@ export function App({ staff, device, onLogout }: Props) {
     : (menu.groups[groupIndex]?.articles ?? []).map((a) => ({ a, gi: groupIndex }));
   const total = preview?.totalOre ?? 0;
   const vatTotal = preview?.vatTotals.reduce((s, v) => s + v.vatOre, 0) ?? 0;
+  const lineDiscounts = basket.reduce((s, l) => s + Math.min(l.discountOre, lineGross(l)), 0);
   const itemCount = basket.reduce((n, l) => n + l.quantity, 0);
-  const canPay = basket.length > 0 && busy === null && online !== false;
-  const inOrder = new Map(basket.map((l) => [l.article.id, l.quantity]));
+  const canPay = basket.length > 0 && busy === null && online !== false && preview !== null;
+  const inOrder = new Map<string, number>();
+  for (const l of basket) inOrder.set(l.articleId, (inOrder.get(l.articleId) ?? 0) + l.quantity);
+  const unsent = basket.reduce((n, l) => n + (l.station ? l.quantity - l.sentQuantity : 0), 0);
   const menuEmpty = menu.groups.every((g) => g.articles.length === 0);
+  const editing = dialog?.kind === 'line' ? basket.find((l) => l.key === dialog.key) : undefined;
 
   return (
     <AppShell header={{ height: 68 }} padding={0}>
@@ -240,11 +457,20 @@ export function App({ staff, device, onLogout }: Props) {
           </Group>
 
           <Group gap={10} wrap="nowrap">
+            {menu.tables.length > 0 && (
+              <Button
+                variant={order?.tableId ? 'light' : 'default'}
+                leftSection={<IconArmchair size={17} stroke={1.7} />}
+                onClick={() => setDialog({ kind: 'tables' })}
+              >
+                {order?.tableName ?? t('Tables')}
+              </Button>
+            )}
             <Button.Group>
               <Button
                 variant="default"
                 leftSection={<IconReceipt size={17} stroke={1.7} />}
-                onClick={() => setReceiptsOpen(true)}
+                onClick={() => setDialog({ kind: 'receipts' })}
               >
                 {t('Receipts')}
               </Button>
@@ -259,7 +485,7 @@ export function App({ staff, device, onLogout }: Props) {
                   </Button>
                 </DropdownMenu.Target>
                 <DropdownMenu.Dropdown>
-                  <DropdownMenu.Item onClick={() => setReport('x')}>
+                  <DropdownMenu.Item onClick={() => setDialog({ kind: 'report', type: 'x' })}>
                     <Text fz="sm" fw={500}>
                       {t('X report')}
                     </Text>
@@ -270,7 +496,7 @@ export function App({ staff, device, onLogout }: Props) {
                   <DropdownMenu.Item
                     disabled={!manager}
                     rightSection={!manager && <IconLock size={14} />}
-                    onClick={() => setReport('z')}
+                    onClick={() => setDialog({ kind: 'report', type: 'z' })}
                   >
                     <Text fz="sm" fw={500}>
                       {t('Z report')}
@@ -296,7 +522,6 @@ export function App({ staff, device, onLogout }: Props) {
                 leftSection={<IconSchool size={17} stroke={1.7} />}
                 disabled={basket.length > 0 || trainingOnly}
                 onClick={() => setTraining((v) => !v)}
-                className={training ? 'training-toggle-on' : undefined}
                 visibleFrom="md"
               >
                 {t('Training')}
@@ -307,7 +532,7 @@ export function App({ staff, device, onLogout }: Props) {
             <LanguageToggle />
             <ColorSchemeToggle />
 
-            <DropdownMenu position="bottom-end" width={220}>
+            <DropdownMenu position="bottom-end" width={230}>
               <DropdownMenu.Target>
                 <UnstyledButton aria-label={staff.displayName} className="user-chip">
                   <Group gap={10} wrap="nowrap">
@@ -333,6 +558,13 @@ export function App({ staff, device, onLogout }: Props) {
               </DropdownMenu.Target>
               <DropdownMenu.Dropdown>
                 <DropdownMenu.Label>{device.device.name}</DropdownMenu.Label>
+                <DropdownMenu.Item
+                  leftSection={<IconChefHat size={16} />}
+                  onClick={() => setKitchen(true)}
+                >
+                  {t('Kitchen display')}
+                </DropdownMenu.Item>
+                <DropdownMenu.Divider />
                 <DropdownMenu.Item
                   leftSection={<IconLogout size={16} />}
                   disabled={busy !== null}
@@ -430,14 +662,19 @@ export function App({ staff, device, onLogout }: Props) {
                       className="item-card"
                       data-in-order={inOrder.has(a.id)}
                       style={{ '--accent': accentOf(gi) } as CSSProperties}
-                      onClick={() => add(a)}
+                      onClick={() => tapItem(a)}
                     >
                       {inOrder.has(a.id) && <span className="item-qty">{inOrder.get(a.id)}</span>}
                       <Text fw={600} lh={1.3} lineClamp={2} pr={inOrder.has(a.id) ? 28 : 0}>
                         {a.name}
                       </Text>
                       <Group justify="space-between" align="center" wrap="nowrap">
-                        <span className="item-price">{formatKr(a.priceOre)}</span>
+                        <span className="item-price">
+                          {a.optionGroups.length > 0 && (
+                            <span className="item-from">{t('from')} </span>
+                          )}
+                          {formatKr(a.priceOre)}
+                        </span>
                         <span className="item-add" aria-hidden="true">
                           <IconPlus size={14} stroke={2.2} />
                         </span>
@@ -453,9 +690,12 @@ export function App({ staff, device, onLogout }: Props) {
           <Box className="order-panel">
             <Group justify="space-between" px="lg" pt="lg" pb="md" wrap="nowrap">
               <div>
-                <Title order={4} fw={600}>
-                  {t('Current order')}
-                </Title>
+                <Group gap={8}>
+                  <Title order={4} fw={600}>
+                    {order?.tableName ?? t('Current order')}
+                  </Title>
+                  {order && saving && <Loader size={12} type="oval" />}
+                </Group>
                 <Text fz="xs" c="dimmed">
                   {itemCount === 0
                     ? t('Empty')
@@ -464,17 +704,40 @@ export function App({ staff, device, onLogout }: Props) {
                       : t('{count} items', { count: itemCount })}
                 </Text>
               </div>
-              {basket.length > 0 && (
-                <Button
-                  variant="subtle"
-                  color="red"
-                  size="compact-sm"
-                  onClick={() => setBasket([])}
-                  disabled={busy !== null}
-                >
-                  {t('Clear')}
-                </Button>
-              )}
+              <Group gap={4} wrap="nowrap">
+                <Tooltip label={t('Discount on the order')}>
+                  <ActionIcon
+                    variant={orderDiscount > 0 ? 'light' : 'subtle'}
+                    color={orderDiscount > 0 ? 'brand' : 'gray'}
+                    size="lg"
+                    disabled={basket.length === 0}
+                    onClick={() => setDialog({ kind: 'discount' })}
+                    aria-label={t('Discount on the order')}
+                  >
+                    <IconPercentage size={18} />
+                  </ActionIcon>
+                </Tooltip>
+                {order ? (
+                  <Button variant="subtle" color="gray" size="compact-sm" onClick={closeTable}>
+                    {t('Close table')}
+                  </Button>
+                ) : (
+                  basket.length > 0 && (
+                    <Button
+                      variant="subtle"
+                      color="red"
+                      size="compact-sm"
+                      onClick={() => {
+                        setBasket([]);
+                        setOrderDiscount(0);
+                      }}
+                      disabled={busy !== null}
+                    >
+                      {t('Clear')}
+                    </Button>
+                  )
+                )}
+              </Group>
             </Group>
 
             <ScrollArea style={{ flex: 1 }} px="lg">
@@ -492,28 +755,47 @@ export function App({ staff, device, onLogout }: Props) {
                 <Stack gap={0}>
                   {basket.map((l) => (
                     <Group
-                      key={l.article.id}
+                      key={l.key}
                       className="order-line"
                       justify="space-between"
                       wrap="nowrap"
                       gap="sm"
                     >
-                      <Box style={{ minWidth: 0, flex: 1 }}>
-                        <Text fw={550} truncate>
-                          {l.article.name}
+                      <UnstyledButton
+                        style={{ minWidth: 0, flex: 1 }}
+                        onClick={() => setDialog({ kind: 'line', key: l.key })}
+                      >
+                        <Group gap={6} wrap="nowrap">
+                          <Text fw={550} truncate>
+                            {l.name}
+                          </Text>
+                          {l.sentQuantity > 0 && (
+                            <Tooltip
+                              label={t('{count} sent to the kitchen', { count: l.sentQuantity })}
+                            >
+                              <IconChefHat size={14} color="var(--mantine-color-brand-filled)" />
+                            </Tooltip>
+                          )}
+                        </Group>
+                        {l.options && (
+                          <Text fz="xs" c="dimmed" truncate>
+                            {l.options}
+                          </Text>
+                        )}
+                        <Text fz="xs" c={l.discountOre > 0 ? 'brand' : 'dimmed'} className="mono">
+                          {formatKr(l.unitPriceOre)}
+                          {l.discountOre > 0 && ` · −${formatKr(l.discountOre)}`}
                         </Text>
-                        <Text fz="xs" c="dimmed" className="mono">
-                          {formatKr(l.article.priceOre)}
-                        </Text>
-                      </Box>
+                      </UnstyledButton>
                       <Group gap={0} className="qty-pill" wrap="nowrap">
                         <ActionIcon
                           variant="subtle"
                           color="gray"
                           radius="xl"
                           size={34}
-                          aria-label={t('Remove one {name}', { name: l.article.name })}
-                          onClick={() => changeQuantity(l.article.id, -1)}
+                          disabled={l.quantity <= l.sentQuantity}
+                          aria-label={t('Remove one {name}', { name: l.name })}
+                          onClick={() => changeQuantity(l.key, -1)}
                         >
                           <IconMinus size={15} />
                         </ActionIcon>
@@ -525,14 +807,14 @@ export function App({ staff, device, onLogout }: Props) {
                           color="gray"
                           radius="xl"
                           size={34}
-                          aria-label={t('Add one {name}', { name: l.article.name })}
-                          onClick={() => changeQuantity(l.article.id, 1)}
+                          aria-label={t('Add one {name}', { name: l.name })}
+                          onClick={() => changeQuantity(l.key, 1)}
                         >
                           <IconPlus size={15} />
                         </ActionIcon>
                       </Group>
                       <Text w={88} ta="right" fw={600} className="mono" fz="sm">
-                        {formatKr(l.quantity * l.article.priceOre)}
+                        {formatKr(lineGross(l) - Math.min(l.discountOre, lineGross(l)))}
                       </Text>
                     </Group>
                   ))}
@@ -542,6 +824,16 @@ export function App({ staff, device, onLogout }: Props) {
 
             <Stack gap={12} p="lg" className="checkout">
               <Stack gap={4}>
+                {(lineDiscounts > 0 || orderDiscount > 0) && (
+                  <Group justify="space-between">
+                    <Text fz="sm" c="brand">
+                      {t('Discounts')}
+                    </Text>
+                    <Text fz="sm" c="brand" className="mono">
+                      −{formatKr(lineDiscounts + orderDiscount)}
+                    </Text>
+                  </Group>
+                )}
                 <Group justify="space-between">
                   <Text fz="sm" c="dimmed">
                     {t('Subtotal excl. VAT')}
@@ -568,7 +860,14 @@ export function App({ staff, device, onLogout }: Props) {
               </Group>
 
               {error && (
-                <Alert color="red" variant="light" icon={<IconAlertCircle size={18} />} py="xs">
+                <Alert
+                  color="red"
+                  variant="light"
+                  icon={<IconAlertCircle size={18} />}
+                  py="xs"
+                  withCloseButton
+                  onClose={() => setError(null)}
+                >
                   {t(error)}
                 </Alert>
               )}
@@ -576,6 +875,20 @@ export function App({ staff, device, onLogout }: Props) {
                 <Alert color="red" variant="light" py="xs">
                   {t('The control system is not responding. No receipt was created.')}
                 </Alert>
+              )}
+
+              {order && unsent > 0 && (
+                <Button
+                  variant="light"
+                  size="md"
+                  h={48}
+                  leftSection={<IconSend size={18} />}
+                  loading={busy === 'send'}
+                  disabled={busy !== null && busy !== 'send'}
+                  onClick={sendToKitchen}
+                >
+                  {t('Send to kitchen ({count})', { count: unsent })}
+                </Button>
               )}
 
               <Button
@@ -586,34 +899,45 @@ export function App({ staff, device, onLogout }: Props) {
                 loading={busy === 'card'}
                 disabled={!canPay}
                 leftSection={<IconCreditCard size={24} stroke={1.7} />}
-                onClick={() => pay('card', total)}
+                onClick={() => charge([{ method: 'card', amountOre: total }], { busyKey: 'card' })}
               >
                 {basket.length === 0
                   ? t('Card')
                   : t('Charge {amount}', { amount: formatKr(total) })}
               </Button>
-              <SimpleGrid cols={2} spacing={10}>
+              <SimpleGrid cols={3} spacing={10}>
                 <Button
                   variant="default"
-                  size="lg"
-                  h={54}
+                  size="md"
+                  h={52}
                   loading={busy === 'swish'}
                   disabled={!canPay}
-                  leftSection={<IconDeviceMobile size={20} stroke={1.7} />}
-                  onClick={() => pay('swish', total)}
+                  leftSection={<IconDeviceMobile size={19} stroke={1.7} />}
+                  onClick={() =>
+                    charge([{ method: 'swish', amountOre: total }], { busyKey: 'swish' })
+                  }
                 >
                   {t('Swish')}
                 </Button>
                 <Button
                   variant="default"
-                  size="lg"
-                  h={54}
-                  loading={busy === 'cash'}
+                  size="md"
+                  h={52}
                   disabled={!canPay}
-                  leftSection={<IconCash size={20} stroke={1.7} />}
-                  onClick={() => setCashOpen(true)}
+                  leftSection={<IconCash size={19} stroke={1.7} />}
+                  onClick={() => setDialog({ kind: 'cash' })}
                 >
                   {t('Cash')}
+                </Button>
+                <Button
+                  variant="default"
+                  size="md"
+                  h={52}
+                  disabled={!canPay}
+                  leftSection={<IconUsersGroup size={19} stroke={1.7} />}
+                  onClick={() => setDialog({ kind: 'split' })}
+                >
+                  {t('Split')}
                 </Button>
               </SimpleGrid>
             </Stack>
@@ -621,23 +945,88 @@ export function App({ staff, device, onLogout }: Props) {
         </Box>
       </AppShell.Main>
 
-      {receiptsOpen && (
+      {dialog?.kind === 'receipts' && (
         <ReceiptsDialog
           canReturn={manager}
-          onClose={() => setReceiptsOpen(false)}
+          onClose={() => setDialog(null)}
           onDone={(receipt) => {
-            setReceiptsOpen(false);
+            setDialog(null);
             setDone({ receipt, changeOre: 0 });
           }}
         />
       )}
-      {report && <ReportDialog type={report} onClose={() => setReport(null)} />}
-      {cashOpen && (
+      {dialog?.kind === 'report' && (
+        <ReportDialog type={dialog.type} onClose={() => setDialog(null)} />
+      )}
+      {dialog?.kind === 'cash' && (
         <CashDialog
           totalOre={total}
           busy={busy === 'cash'}
-          onPay={(amountOre, changeOre) => pay('cash', amountOre, changeOre)}
-          onCancel={() => setCashOpen(false)}
+          onPay={(amountOre, changeOre) =>
+            charge([{ method: 'cash', amountOre }], { changeOre, busyKey: 'cash' })
+          }
+          onCancel={() => setDialog(null)}
+        />
+      )}
+      {dialog?.kind === 'options' && (
+        <OptionsDialog
+          article={dialog.article}
+          onClose={() => setDialog(null)}
+          onAdd={(optionIds) => {
+            add(dialog.article, optionIds);
+            setDialog(null);
+          }}
+        />
+      )}
+      {editing && (
+        <LineDialog
+          line={editing}
+          onClose={() => setDialog(null)}
+          onRemove={() => {
+            setBasket((lines) => lines.filter((l) => l.key !== editing.key));
+            setDialog(null);
+          }}
+          onSave={(line) => {
+            setBasket((lines) => lines.map((l) => (l.key === line.key ? line : l)));
+            setDialog(null);
+          }}
+        />
+      )}
+      {dialog?.kind === 'discount' && (
+        <OrderDiscountDialog
+          amountOre={basket.reduce(
+            (s, l) => s + lineGross(l) - Math.min(l.discountOre, lineGross(l)),
+            0,
+          )}
+          currentOre={orderDiscount}
+          onClose={() => setDialog(null)}
+          onSave={(d) => {
+            setOrderDiscount(d);
+            setDialog(null);
+          }}
+        />
+      )}
+      {dialog?.kind === 'split' && (
+        <SplitDialog
+          lines={basket}
+          totalOre={total}
+          busy={busy !== null}
+          onClose={() => setDialog(null)}
+          onPayParts={(payments) => charge(payments, { busyKey: 'split' })}
+          onPayItems={(quantities, method) => {
+            const subset = subsetOf(basket, quantities);
+            const subtotal = previewOf(subset, 0)?.totalOre ?? 0;
+            const amountOre = method === 'cash' ? roundToKrona(ore(subtotal)) : subtotal;
+            void charge([{ method, amountOre }], { subset, busyKey: 'split' });
+          }}
+        />
+      )}
+      {dialog?.kind === 'tables' && (
+        <TablesDialog
+          tables={menu.tables}
+          currentTableId={order?.tableId ?? null}
+          onOpen={openTable}
+          onClose={() => setDialog(null)}
         />
       )}
       {done && (
@@ -645,7 +1034,7 @@ export function App({ staff, device, onLogout }: Props) {
           receipt={done.receipt}
           restaurantName={menu.restaurant.name}
           changeOre={done.changeOre}
-          onNewSale={newSale}
+          onNewSale={() => setDone(null)}
         />
       )}
     </AppShell>

@@ -431,3 +431,111 @@ textarea {
     mask: none;
   }
 }
+
+/* ---------- Options, discounts, split ---------- */
+
+.option-row {
+  display: block;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--app-line);
+  border-radius: var(--mantine-radius-md);
+  background: var(--app-surface);
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
+}
+
+.option-row:hover {
+  border-color: var(--app-line-strong);
+}
+
+.option-row[data-checked='true'] {
+  border-color: var(--mantine-color-brand-filled);
+  background: var(--mantine-color-brand-light);
+}
+
+.summary-box {
+  border-radius: var(--mantine-radius-md);
+  background: var(--app-surface-muted);
+  border: 1px solid var(--app-line);
+}
+
+.item-from {
+  font-family: var(--mantine-font-family);
+  font-size: 0.75rem;
+}
+
+/* ---------- Tables ---------- */
+
+.table-tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 112px;
+  padding: 14px 16px;
+  border: 1px dashed var(--app-line-strong);
+  border-radius: var(--mantine-radius-lg);
+  background: var(--app-surface-muted);
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.table-tile:hover {
+  border-color: var(--mantine-color-brand-4);
+}
+
+.table-tile[data-busy='true'] {
+  border: 1px solid var(--mantine-color-brand-3);
+  background: var(--mantine-color-brand-light);
+}
+
+.table-tile[data-current='true'] {
+  box-shadow: 0 0 0 2px var(--mantine-color-brand-filled);
+}
+
+.table-tile .table-icon {
+  color: var(--mantine-color-dimmed);
+}
+
+.table-tile[data-busy='true'] .table-icon {
+  color: var(--mantine-color-brand-filled);
+}
+
+/* ---------- Kitchen display ---------- */
+
+.kitchen {
+  background: var(--app-bg);
+}
+
+.ticket {
+  overflow: hidden;
+  border: 1px solid var(--app-line);
+  border-radius: var(--mantine-radius-lg);
+  background: var(--app-surface);
+  box-shadow: var(--mantine-shadow-sm);
+  border-top: 4px solid var(--mantine-color-gray-4);
+  animation: line-in 200ms ease-out;
+}
+
+.ticket[data-urgency='warn'] {
+  border-top-color: var(--mantine-color-orange-5);
+}
+
+.ticket[data-urgency='late'] {
+  border-top-color: var(--mantine-color-red-6);
+}
+
+.ticket-head {
+  padding: 12px 16px;
+  border-bottom: 1px dashed var(--app-line-strong);
+}
+
+.ticket-qty {
+  min-width: 34px;
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 1.1rem;
+  font-weight: 700;
+}

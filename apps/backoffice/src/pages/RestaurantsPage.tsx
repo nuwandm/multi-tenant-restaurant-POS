@@ -37,6 +37,7 @@ import { useT } from '../i18n';
 import { notifyOk } from '../notify';
 import { PageHeader } from '../PageHeader';
 import { useAction, useLoad } from '../useLoad';
+import { TablesSection } from './TablesSection';
 import { TableSkeleton } from './TableSkeleton';
 
 const STATUS_COLORS = { pending: 'orange', active: 'brand', suspended: 'red' } as const;
@@ -283,6 +284,7 @@ export function RestaurantsPage({ tenantId }: { tenantId: string }) {
               empty={r.registers.length === 0}
               onAdded={reload}
             />
+            <TablesSection tenantId={tenantId} restaurant={r} onChanged={reload} />
           </Card>
         ))}
       </Stack>

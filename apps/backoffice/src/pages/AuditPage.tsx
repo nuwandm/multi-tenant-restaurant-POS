@@ -29,6 +29,13 @@ const ACTION_LABELS: Record<string, string> = {
   'article.update': 'Changed an item',
   'staff.create': 'Added staff',
   'staff.update': 'Changed staff',
+  'option_group.create': 'Added an option group',
+  'option_group.update': 'Changed an option group',
+  'option.create': 'Added an option',
+  'option.update': 'Changed an option',
+  'article.options': 'Changed the options of an item',
+  'table.create': 'Added a table',
+  'table.update': 'Changed a table',
 };
 
 function actionIcon(action: string): Icon {

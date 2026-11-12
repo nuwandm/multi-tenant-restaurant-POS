@@ -1,4 +1,5 @@
 import { addOre, ore, type Ore } from './money';
+import { allocateDiscount } from './discount';
 import { divRound, roundToKrona } from './rounding';
 import { vatTotals, type VatRate, type VatTotal } from './vat';
 
@@ -12,6 +13,8 @@ export class ReceiptError extends Error {
 export interface LineInput {
   articleId?: string;
   name: string;
+  /** Chosen options as shown on the receipt, e.g. "Large, Extra cheese". */
+  options?: string;
   /** Positive whole number. Returns are built with buildReturn, not with negative quantities. */
   quantity: number;
   /** Unit price including VAT. */
@@ -31,6 +34,7 @@ export interface ReceiptLine {
   lineNo: number;
   articleId?: string;
   name: string;
+  options?: string;
   /** Negative on returns. */
   quantity: number;
   unitPriceOre: Ore;
@@ -51,11 +55,15 @@ export interface BuiltReceipt {
   payments: PaymentInput[];
   /** Cash rounding (öresavrundning) applied to the cash part; payments sum to total + this. */
   cashRoundingOre: Ore;
+  /** Discount on the whole order, already spread into the lines' discountOre. */
+  orderDiscountOre?: Ore;
 }
 
 export interface ReceiptInput {
   kind: 'sale' | 'training' | 'proforma';
   lines: LineInput[];
+  /** Discount on the whole order, spread over the lines in proportion so VAT stays right. */
+  orderDiscountOre?: Ore;
   payments: PaymentInput[];
 }
 
@@ -77,6 +85,7 @@ export function buildReceipt(input: ReceiptInput): BuiltReceipt {
       lineNo: i + 1,
       ...(line.articleId !== undefined && { articleId: line.articleId }),
       name: line.name,
+      ...(line.options && { options: line.options }),
       quantity: line.quantity,
       unitPriceOre: line.unitPriceOre,
       vatRate: line.vatRate,
@@ -85,10 +94,26 @@ export function buildReceipt(input: ReceiptInput): BuiltReceipt {
     };
   });
 
+  const orderDiscount = input.orderDiscountOre ?? ore(0);
+  const subtotal = lines.reduce((sum, l) => sum + l.lineTotalOre, 0);
+  if (orderDiscount < 0 || orderDiscount > subtotal) {
+    throw new ReceiptError('The order discount must be between 0 and the order total');
+  }
+  const shares = allocateDiscount(
+    lines.map((l) => l.lineTotalOre),
+    orderDiscount,
+  );
+  const discounted = lines.map((l, i) => ({
+    ...l,
+    discountOre: ore(l.discountOre + shares[i]!),
+    lineTotalOre: ore(l.lineTotalOre - shares[i]!),
+  }));
+
   if (input.kind === 'proforma' && input.payments.length > 0) {
     throw new ReceiptError('A proforma receipt cannot take payments');
   }
-  return finish(input.kind, lines, input.payments);
+  const built = finish(input.kind, discounted, input.payments);
+  return orderDiscount > 0 ? { ...built, orderDiscountOre: orderDiscount } : built;
 }
 
 export interface ReturnInput {
@@ -123,6 +148,7 @@ export function buildReturn(original: BuiltReceipt, input: ReturnInput): BuiltRe
       lineNo: i + 1,
       ...(source.articleId !== undefined && { articleId: source.articleId }),
       name: source.name,
+      ...(source.options && { options: source.options }),
       quantity: -quantity,
       unitPriceOre: source.unitPriceOre,
       vatRate: source.vatRate,

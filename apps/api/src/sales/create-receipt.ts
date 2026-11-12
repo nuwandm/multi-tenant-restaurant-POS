@@ -6,13 +6,14 @@ import {
   type BuiltReceipt,
   ore,
   type PaymentMethod,
-  type VatRate,
 } from '@pos/domain';
 import type { Sql, TransactionSql } from 'postgres';
 import type { StaffSession } from '../auth/session';
 import { withTenant } from '../db/tenant';
 import { HttpError } from '../errors';
 import { loadReceipts, type LoadedReceipt } from './load-receipts';
+import { consumeOpenOrder } from './open-orders';
+import { createKitchenTickets, priceLines, type LineRequest, type PricedLine } from './pricing';
 import { lockRegister, type LockedRegister } from './register';
 import { storeReceipt, type StoredReceipt } from './store-receipt';
 
@@ -22,23 +23,17 @@ type PaymentRequest = { method: PaymentMethod; amountOre: number }[];
 export interface CreateReceiptRequest {
   kind: 'sale' | 'training' | 'proforma';
   /** Prices, names and VAT rates come from the menu; the client sends only what and how many. */
-  lines: { articleId: string; quantity: number; discountOre?: number }[];
+  lines: LineRequest[];
+  orderDiscountOre?: number;
   payments: PaymentRequest;
+  /** Paying (part of) an open order: the sold lines come off it, in the same transaction. */
+  openOrderId?: string;
 }
 
 export interface CreateReturnRequest {
   originalReceiptId: string;
   lines: { lineNo: number; quantity: number }[];
   payments: PaymentRequest;
-}
-
-interface ArticleRow {
-  id: string;
-  restaurant_id: string;
-  name: string;
-  price_ore: number;
-  vat_rate: VatRate;
-  active: boolean;
 }
 
 const toPayments = (payments: PaymentRequest) =>
@@ -56,7 +51,12 @@ async function onceOnRegister(
   make: (
     tx: TransactionSql,
     register: LockedRegister,
-  ) => Promise<{ built: BuiltReceipt; originalReceiptId?: string }>,
+  ) => Promise<{
+    built: BuiltReceipt;
+    originalReceiptId?: string;
+    /** Runs after the receipt is stored, in the same transaction. */
+    after?: (stored: StoredReceipt) => Promise<void>;
+  }>,
 ): Promise<StoredReceipt> {
   return withTenant(deps.sql, staff.tenantId, async (tx) => {
     const register = await lockRegister(tx, staff.registerId, { forSelling: true, allowPending });
@@ -66,8 +66,8 @@ async function onceOnRegister(
         WHERE register_id = ${staff.registerId} AND idempotency_key = ${idempotencyKey}`;
       if (earlier) return (await loadReceipts(tx, [earlier.id]))[0]!;
     }
-    const { built, originalReceiptId = null } = await make(tx, register);
-    return storeReceipt(
+    const { built, originalReceiptId = null, after } = await make(tx, register);
+    const stored = await storeReceipt(
       tx,
       deps.controlSystem,
       staff,
@@ -76,6 +76,8 @@ async function onceOnRegister(
       originalReceiptId,
       idempotencyKey,
     );
+    await after?.(stored);
+    return stored;
   });
 }
 
@@ -88,13 +90,43 @@ export async function createReceipt(
 ): Promise<StoredReceipt> {
   // A company waiting for approval may ring up training receipts, never real sales.
   const training = request.kind === 'training';
-  return onceOnRegister(deps, staff, idempotencyKey, training, async (tx, register) => ({
-    built: buildReceipt({
+  return onceOnRegister(deps, staff, idempotencyKey, training, async (tx, register) => {
+    const priced = await priceLines(tx, register.restaurantId, request.lines);
+    const built = buildReceipt({
       kind: request.kind,
-      lines: await priceLines(tx, register.restaurantId, request.lines),
+      lines: priced,
+      ...(request.orderDiscountOre && { orderDiscountOre: ore(request.orderDiscountOre) }),
       payments: toPayments(request.payments),
-    }),
-  }));
+    });
+    return {
+      built,
+      // Paid items go to the kitchen: everything on a quick sale, or what an open order hadn't
+      // sent yet. Proforma receipts are only quotes and send nothing.
+      after: async (stored) => {
+        if (request.kind === 'proforma') return;
+        let label = `#${stored.receiptNumber}`;
+        let toKitchen: PricedLine[] = priced;
+        if (request.openOrderId) {
+          const consumed = await consumeOpenOrder(tx, staff, request.openOrderId, priced);
+          label = consumed.label;
+          toKitchen = consumed.unsent;
+        }
+        await createKitchenTickets(
+          tx,
+          {
+            tenantId: staff.tenantId,
+            restaurantId: register.restaurantId,
+            createdBy: staff.userId,
+            label,
+            training,
+            openOrderId: request.openOrderId ?? null,
+            receiptId: stored.id,
+          },
+          toKitchen,
+        );
+      },
+    };
+  });
 }
 
 /** Return of all or part of a sale, from any register of the same company. */
@@ -153,34 +185,4 @@ async function loadOriginal(tx: TransactionSql, id: string): Promise<LoadedRecei
   const [original] = await loadReceipts(tx, [id]);
   if (!original) throw new HttpError(404, 'receipt_not_found', 'Receipt not found');
   return original;
-}
-
-async function priceLines(
-  tx: TransactionSql,
-  restaurantId: string,
-  lines: CreateReceiptRequest['lines'],
-) {
-  const ids = [...new Set(lines.map((l) => l.articleId))];
-  const articles = await tx<ArticleRow[]>`
-    SELECT id, restaurant_id, name, price_ore, vat_rate, active FROM articles WHERE id IN ${tx(ids)}`;
-  const byId = new Map(articles.map((a) => [a.id, a]));
-
-  return lines.map((line, i) => {
-    const article = byId.get(line.articleId);
-    if (!article || !article.active || article.restaurant_id !== restaurantId) {
-      throw new HttpError(
-        400,
-        'article_unavailable',
-        `Line ${i + 1}: article is not on sale at this register`,
-      );
-    }
-    return {
-      articleId: article.id,
-      name: article.name,
-      quantity: line.quantity,
-      unitPriceOre: ore(article.price_ore),
-      vatRate: article.vat_rate,
-      ...(line.discountOre !== undefined && { discountOre: ore(line.discountOre) }),
-    };
-  });
 }

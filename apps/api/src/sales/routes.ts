@@ -48,10 +48,13 @@ const createReceiptSchema = {
             articleId: uuid,
             quantity: { ...integer, minimum: 1, maximum: 999 },
             discountOre: { ...integer, minimum: 0 },
+            optionIds: { type: 'array', maxItems: 20, items: uuid },
           },
         },
       },
       payments,
+      orderDiscountOre: { ...integer, minimum: 0 },
+      openOrderId: uuid,
     },
   },
 } as const;

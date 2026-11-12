@@ -7,11 +7,28 @@ import type {
   ZReportTotals,
 } from '@pos/domain';
 
+export type Station = 'kitchen' | 'bar';
+
+export interface OptionGroup {
+  id: string;
+  name: string;
+  minSelect: number;
+  maxSelect: number;
+  options: { id: string; name: string; priceDeltaOre: number }[];
+}
+
 export interface Article {
   id: string;
   name: string;
   priceOre: number;
   vatRate: VatRate;
+  station: Station | null;
+  optionGroups: OptionGroup[];
+}
+
+export interface DiningTable {
+  id: string;
+  name: string;
 }
 
 export interface Menu {
@@ -20,6 +37,55 @@ export interface Menu {
   seller: { legalName: string; orgNumber: string };
   /** name is null for items without a group. */
   groups: { name: string | null; articles: Article[] }[];
+  tables: DiningTable[];
+}
+
+/** What the till sends for a line. Prices always come from the server. */
+export interface LineRequest {
+  articleId: string;
+  quantity: number;
+  optionIds?: string[];
+  discountOre?: number;
+}
+
+/** A line on an open order, priced by the server. */
+export interface OrderLine {
+  key: string;
+  articleId: string;
+  name: string;
+  options?: string;
+  optionIds: string[];
+  quantity: number;
+  unitPriceOre: number;
+  vatRate: VatRate;
+  discountOre?: number;
+  station: Station | null;
+  sentQuantity: number;
+}
+
+export interface OpenOrder {
+  id: string;
+  tableId: string | null;
+  tableName: string | null;
+  lines: OrderLine[];
+  orderDiscountOre: number;
+  totalOre: number;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+}
+
+export interface KitchenTicket {
+  id: string;
+  station: Station;
+  ticketNo: number;
+  label: string;
+  training: boolean;
+  createdAt: string;
+  doneAt: string | null;
+  lines: { name: string; options: string | null; quantity: number }[];
+  createdBy: string;
 }
 
 export interface Receipt {
@@ -54,8 +120,10 @@ export interface Report extends ZReportTotals {
 
 export interface NewReceipt {
   kind: 'sale' | 'training';
-  lines: { articleId: string; quantity: number }[];
+  lines: LineRequest[];
+  orderDiscountOre?: number;
   payments: { method: PaymentMethod; amountOre: number }[];
+  openOrderId?: string;
 }
 
 export class ApiError extends Error {
@@ -77,6 +145,12 @@ const ERROR_TEXT: Record<string, string> = {
   control_system_unavailable: 'The control system is not responding. No receipt was created.',
   register_retired: 'This register is retired.',
   article_unavailable: 'An item is no longer on the menu. Clear the order and try again.',
+  option_unavailable: 'An option is no longer available. Remove the item and add it again.',
+  option_choice: 'An item is missing a required choice. Remove it and add it again.',
+  table_busy: 'This table already has an open order.',
+  order_changed: 'Someone else changed this order. It has been reloaded.',
+  order_closed: 'This order is already closed.',
+  invalid_discount: 'The discount is larger than the amount.',
   company_pending:
     'The company is waiting for approval and cannot sell yet. Use training mode meanwhile.',
   company_suspended: 'The company is suspended and cannot sell.',
@@ -276,3 +350,33 @@ export const createCopy = (originalReceiptId: string, idempotencyKey: string) =>
 export const createXReport = () => post<Report>('x-reports');
 
 export const createZReport = () => post<Report>('z-reports');
+
+export const listOpenOrders = () => request<OpenOrder[]>(`/registers/${registerId}/open-orders`);
+
+export const createOpenOrder = (body: {
+  tableId: string | null;
+  lines: LineRequest[];
+  orderDiscountOre?: number;
+}) => post<OpenOrder>('open-orders', body);
+
+export const updateOpenOrder = (
+  orderId: string,
+  body: { lines: LineRequest[]; orderDiscountOre?: number; version: number },
+) =>
+  request<OpenOrder>(`/registers/${registerId}/open-orders/${orderId}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+
+export const sendOpenOrder = (orderId: string) =>
+  post<{ tickets: number; order: OpenOrder }>(`open-orders/${orderId}/send`);
+
+export const cancelOpenOrder = (orderId: string) => post<void>(`open-orders/${orderId}/cancel`);
+
+export const listKitchenTickets = (station?: Station) =>
+  request<KitchenTicket[]>(
+    `/registers/${registerId}/kitchen-tickets${station ? `?station=${station}` : ''}`,
+  );
+
+export const setTicketDone = (ticketId: string, done: boolean) =>
+  post<{ id: string; done: boolean }>(`kitchen-tickets/${ticketId}`, { done });

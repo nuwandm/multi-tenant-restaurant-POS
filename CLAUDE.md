@@ -46,6 +46,8 @@ Workspace packages are consumed as TypeScript source; there is no build step for
 - The platform console reads across tenants only through the `app_platform_*` SECURITY DEFINER functions, which return status and usage, never receipts, menus or staff. The migration owner must be a superuser or have BYPASSRLS for them to work.
 - A company is `pending` until a platform admin approves it; `lockRegister(..., { forSelling: true })` refuses to sell for pending or suspended companies. The app role cannot change `tenants.status`.
 - Child tables carry tenant_id and use composite foreign keys (tenant_id, parent_id).
+- Prices of options and discounts are computed only on the server (apps/api/src/sales/pricing.ts). Order discounts are spread over the lines with `allocateDiscount` so VAT per rate stays exact.
+- Table orders live in `open_orders` (with a `version` for optimistic locking). Paying with `openOrderId` consumes the paid quantities in the same transaction as the receipt. Kitchen tickets are per station and made when an order is sent, or at sale for quick sales.
 - Money columns end in `_ore` and are bigint.
 
 ## Workflow

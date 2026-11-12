@@ -20,6 +20,7 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import {
   IconBuildingStore,
+  IconChartBar,
   IconChevronDown,
   IconFileAnalytics,
   IconHistory,
@@ -44,6 +45,7 @@ import { AuditPage } from './pages/AuditPage';
 import { MenuPage } from './pages/MenuPage';
 import { OverviewPage } from './pages/OverviewPage';
 import { PlatformPage } from './pages/PlatformPage';
+import { ReportsPage } from './pages/ReportsPage';
 import { RestaurantsPage } from './pages/RestaurantsPage';
 import { StaffPage } from './pages/StaffPage';
 import { ZReportsPage } from './pages/ZReportsPage';
@@ -51,6 +53,7 @@ import { avatarColor, initials } from './people';
 import { useAction } from './useLoad';
 
 const COMPANY_PAGES = {
+  sales: 'Sales',
   restaurants: 'Restaurants & registers',
   menu: 'Menu',
   staff: 'Staff',
@@ -59,6 +62,7 @@ const COMPANY_PAGES = {
 } as const;
 
 const PAGE_ICONS: Record<keyof typeof COMPANY_PAGES, Icon> = {
+  sales: IconChartBar,
   restaurants: IconBuildingStore,
   menu: IconToolsKitchen2,
   staff: IconUsers,
@@ -212,6 +216,7 @@ export function Shell({ me, onChanged, onLogout }: Props) {
           {page === 'overview' && <OverviewPage onRegister={() => setAddingCompany(true)} />}
           {page === 'platform' && me.isPlatformAdmin && <PlatformPage />}
           {company && page === 'restaurants' && <RestaurantsPage tenantId={company.tenantId} />}
+          {company && page === 'sales' && <ReportsPage tenantId={company.tenantId} />}
           {company && page === 'menu' && <MenuPage tenantId={company.tenantId} />}
           {company && page === 'staff' && (
             <StaffPage

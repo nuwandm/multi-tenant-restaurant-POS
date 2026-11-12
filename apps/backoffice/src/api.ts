@@ -31,6 +31,36 @@ export interface Restaurant {
   name: string;
   address: string | null;
   registers: Register[];
+  tables: { id: string; name: string; active: boolean }[];
+}
+
+export type Station = 'kitchen' | 'bar';
+
+export interface OptionGroup {
+  id: string;
+  name: string;
+  minSelect: number;
+  maxSelect: number;
+  active: boolean;
+  options: { id: string; name: string; priceDeltaOre: number; active: boolean }[];
+}
+
+export interface SalesReport {
+  from: string;
+  to: string;
+  totals: {
+    netOre: number;
+    salesOre: number;
+    returnsOre: number;
+    receipts: number;
+    returns: number;
+    averageOre: number;
+  };
+  days: { day: string; netOre: number; receipts: number }[];
+  hours: { hour: number; netOre: number; receipts: number }[];
+  payments: { method: string; amountOre: number }[];
+  topItems: { name: string; quantity: number; netOre: number }[];
+  vat: { vatRate: number; netOre: number; vatOre: number }[];
 }
 
 export interface MenuGroup {
@@ -47,6 +77,8 @@ export interface Article {
   vatRate: VatRate;
   menuGroupId: string | null;
   active: boolean;
+  station: Station | null;
+  optionGroupIds: string[];
 }
 
 export interface StaffMember {
@@ -122,6 +154,9 @@ const ERROR_TEXT: Record<string, string> = {
   cannot_change_self: 'You cannot deactivate yourself or change your own role.',
   cashier_no_password: 'Cashiers use the till only and get no password.',
   invalid_token: 'The link is wrong, already used or expired.',
+  table_name_taken: 'A table with that name already exists.',
+  invalid_choice_range: 'Max must be at least min.',
+  invalid_range: 'Choose a valid date range of at most one year.',
   register_not_found: 'The register does not exist or is retired.',
   company_not_found: 'Company not found.',
 };
@@ -246,7 +281,13 @@ export const api = {
   addArticle: (
     tenantId: string,
     restaurantId: string,
-    body: { name: string; priceOre: number; vatRate: VatRate; menuGroupId: string | null },
+    body: {
+      name: string;
+      priceOre: number;
+      vatRate: VatRate;
+      menuGroupId: string | null;
+      station?: Station | null;
+    },
   ) => post(`${t(tenantId)}/restaurants/${restaurantId}/articles`, body),
   updateArticle: (tenantId: string, articleId: string, body: Partial<Omit<Article, 'id'>>) =>
     patch(`${t(tenantId)}/articles/${articleId}`, body),
@@ -264,6 +305,38 @@ export const api = {
 
   zReports: (tenantId: string) => get<ZReportRow[]>(`${t(tenantId)}/z-reports`),
   audit: (tenantId: string) => get<AuditEntry[]>(`${t(tenantId)}/audit`),
+
+  optionGroups: (tenantId: string, restaurantId: string) =>
+    get<OptionGroup[]>(`${t(tenantId)}/restaurants/${restaurantId}/option-groups`),
+  addOptionGroup: (
+    tenantId: string,
+    restaurantId: string,
+    body: { name: string; minSelect: number; maxSelect: number },
+  ) => post(`${t(tenantId)}/restaurants/${restaurantId}/option-groups`, body),
+  updateOptionGroup: (
+    tenantId: string,
+    groupId: string,
+    body: Partial<{ name: string; minSelect: number; maxSelect: number; active: boolean }>,
+  ) => patch(`${t(tenantId)}/option-groups/${groupId}`, body),
+  addOption: (tenantId: string, groupId: string, body: { name: string; priceDeltaOre: number }) =>
+    post(`${t(tenantId)}/option-groups/${groupId}/options`, body),
+  updateOption: (
+    tenantId: string,
+    optionId: string,
+    body: Partial<{ name: string; priceDeltaOre: number; active: boolean }>,
+  ) => patch(`${t(tenantId)}/options/${optionId}`, body),
+  setArticleOptionGroups: (tenantId: string, articleId: string, groupIds: string[]) =>
+    request('PUT', `${t(tenantId)}/articles/${articleId}/option-groups`, { groupIds }),
+
+  addTable: (tenantId: string, restaurantId: string, name: string) =>
+    post(`${t(tenantId)}/restaurants/${restaurantId}/tables`, { name }),
+  updateTable: (tenantId: string, tableId: string, body: { name?: string; active?: boolean }) =>
+    patch(`${t(tenantId)}/tables/${tableId}`, body),
+
+  salesReport: (tenantId: string, from: string, to: string, restaurantId?: string | null) =>
+    get<SalesReport>(
+      `${t(tenantId)}/reports/sales?from=${from}&to=${to}${restaurantId ? `&restaurantId=${restaurantId}` : ''}`,
+    ),
 
   platformCompanies: () => get<PlatformCompany[]>('/platform/companies'),
   setCompanyStatus: (tenantId: string, action: 'approve' | 'suspend' | 'reactivate') =>
