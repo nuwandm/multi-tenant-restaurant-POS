@@ -1,7 +1,7 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { isValidOrgNumber } from '@pos/domain';
 import type { Sql, TransactionSql } from 'postgres';
-import { hashPin } from '../src/auth/pin';
+import { hashPassword, hashPin } from '../src/auth/pin';
 import { newSessionToken, type Role } from '../src/auth/session';
 import { withTenant } from '../src/db/tenant';
 
@@ -37,7 +37,7 @@ export async function createTenant(
 ): Promise<TenantFixture> {
   const tenantId = randomUUID();
   const base = await withTenant(sql, tenantId, async (tx) => {
-    await tx`INSERT INTO tenants (id, legal_name, org_number) VALUES (${tenantId}, ${'Restaurang ' + orgNumber}, ${orgNumber})`;
+    await tx`INSERT INTO tenants (id, legal_name, org_number, status) VALUES (${tenantId}, ${'Restaurang ' + orgNumber}, ${orgNumber}, 'active')`;
     const [restaurant] = await tx<{ id: string }[]>`
       INSERT INTO restaurants (tenant_id, name) VALUES (${tenantId}, 'Main') RETURNING id`;
     const registerId = await insertRegister(tx, tenantId, restaurant!.id, designation);
@@ -50,6 +50,15 @@ export async function createTenant(
   });
   const token = await createSession(sql, base.tenantId, managerId, base.registerId, 'manager');
   return { ...base, managerId, token };
+}
+
+/** A platform admin with a back office password. Written directly, as the CLI script does. */
+export async function createPlatformAdmin(sql: Sql, email: string, password: string) {
+  const [user] = await sql<{ id: string }[]>`
+    INSERT INTO users (email, display_name, password_hash)
+    VALUES (${email}, 'Platform admin', ${await hashPassword(password)}) RETURNING id`;
+  await sql`INSERT INTO platform_admins (user_id) VALUES (${user!.id})`;
+  return user!.id;
 }
 
 /** A staff member with a PIN. Returns the user id. */

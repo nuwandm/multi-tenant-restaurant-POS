@@ -7,7 +7,7 @@ Nov 12, 2026 · @Nuwan Madusanka
 We will build one multi-tenant restaurant POS that runs five Swedish restaurants. Each restaurant's sales, receipt numbering and reports stay separate, and the system meets Skatteverket's cash-register rules, including the XML journal export that becomes mandatory on 1 January 2027.
 
 - **What:** a web-based POS (order taking, payment recording, receipts, X/Z reports) plus a back office for menus, staff and reporting.
-- **Who:** five restaurants. Each is a tenant with its own organisation number and one or more cash registers.
+- **Who:** restaurant owners across Sweden, starting with five pilot restaurants. Owners sign up themselves; each company is a tenant with its own organisation number, one or more restaurants (branches) and their registers.
 - **How:** a React/TypeScript front end and a Node/TypeScript API on PostgreSQL. Signing goes through a certified cloud control system instead of a box at every till. Development is paired with Claude Code, phase by phase, using the prompts in this doc.
 - **Outcome:** a pilot register live in one restaurant first, then all five, each register registered with Skatteverket under its own designation (kassabeteckning).
 
@@ -20,6 +20,15 @@ The biggest decision is ownership. If we write the register software ourselves, 
 3. **Owning the data and the roadmap.** We decide on integrations (accounting, booking, delivery) instead of waiting for a vendor.
 
 If none of these matters enough, the recommended fallback is to **buy a declared register and build only the back office and group reporting** on its API.
+
+## Scope change: a SaaS platform (12 November 2026)
+
+The platform is now sold to restaurant owners, not only run for one group.
+
+- **Platform admin (us):** approves new companies, suspends them if needed, and sees each company's status and usage (branches, registers, staff count, last sale, 30-day sales total). The console never shows receipts, menus or staff details: owners' business data stays theirs.
+- **Owners sign up themselves** with company name, organisation number and first restaurant. A new company starts *pending*: the owner can set up menu, staff, branches and registers at once, but the tills can't sell until we approve. One owner can register several companies, and each company can have several restaurants.
+- **Owners and managers** run their own companies in the back office: branches, registers, menu and prices, staff and PINs, Z-report history and a change log.
+- **Consequence:** because we sell the register software, we are its manufacturer and must issue the manufacturer declaration. Buying a declared register is no longer a fallback. We also become a personal-data processor for every customer and need a data processing agreement (DPA) with each.
 
 ## Swedish compliance requirements
 
@@ -108,7 +117,6 @@ Version 1 covers what a restaurant needs to sell legally and close the day. Ever
 - Building our own control unit. We buy a certified cloud control system.
 - Payment terminal integration. Card payments are taken on the existing terminal and recorded by type. This is the largest gap against competitors and the first v2 item.
 - Online and QR ordering, delivery platforms, table booking, loyalty, staff scheduling and stock control. Where needed, integrate with a specialist (for example a booking system) instead of building it.
-- Selling the system to restaurants outside the group.
 
 ## Architecture and tech stack
 

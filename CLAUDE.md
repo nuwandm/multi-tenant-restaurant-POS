@@ -39,6 +39,9 @@ Workspace packages are consumed as TypeScript source; there is no build step for
 - Migrations are plain SQL in apps/api/db/migrations, numbered, never edited after merge. Add a new file instead.
 - Tenant data is accessed only through `withTenant(sql, tenantId, fn)` in apps/api/src/db/tenant.ts. It sets `SET LOCAL ROLE pos_app` and `app.tenant_id`, so RLS applies even on a superuser connection.
 - Routes that touch tenant data use the `requireStaff(sql, roles?)` preHandler (apps/api/src/auth/session.ts) and take tenant and register from `req.staff`, never from the request. Only `login-info` and `/auth/login` read the temporary `x-tenant-id` header, until device pairing exists.
+- Back office routes under `/admin/tenants/:tenantId` use `requireTenantAdmin` (owner or manager in that company) and write an `audit_log` entry for every change. `withUser` (app.user_id) lets a user see only their own memberships and companies.
+- The platform console reads across tenants only through the `app_platform_*` SECURITY DEFINER functions, which return status and usage, never receipts, menus or staff. The migration owner must be a superuser or have BYPASSRLS for them to work.
+- A company is `pending` until a platform admin approves it; `lockRegister(..., { forSelling: true })` refuses to sell for pending or suspended companies. The app role cannot change `tenants.status`.
 - Child tables carry tenant_id and use composite foreign keys (tenant_id, parent_id).
 - Money columns end in `_ore` and are bigint.
 

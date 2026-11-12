@@ -21,6 +21,7 @@ interface RegisterRow {
   legal_name: string;
   org_number: string;
   last_z_period_to: Date | null;
+  tenant_status: 'pending' | 'active' | 'suspended';
 }
 
 /**
@@ -35,7 +36,7 @@ export async function lockRegister(
 ): Promise<LockedRegister> {
   const [row] = await tx<RegisterRow[]>`
     SELECT r.restaurant_id, r.designation, r.status, r.control_system_ref, r.created_at,
-           t.legal_name, t.org_number,
+           t.legal_name, t.org_number, t.status AS tenant_status,
            (SELECT max(period_to) FROM z_reports z WHERE z.register_id = r.id) AS last_z_period_to
     FROM cash_registers r JOIN tenants t ON t.id = r.tenant_id
     WHERE r.id = ${registerId}
@@ -43,6 +44,15 @@ export async function lockRegister(
   if (!row) throw new HttpError(404, 'register_not_found', 'Register not found');
 
   if (options.forSelling) {
+    if (row.tenant_status !== 'active') {
+      throw new HttpError(
+        409,
+        row.tenant_status === 'pending' ? 'company_pending' : 'company_suspended',
+        row.tenant_status === 'pending'
+          ? 'This company is waiting for approval and cannot sell yet'
+          : 'This company is suspended and cannot sell',
+      );
+    }
     if (row.status !== 'active') {
       throw new HttpError(409, 'register_retired', 'This register is retired');
     }

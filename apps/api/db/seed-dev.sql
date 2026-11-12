@@ -5,8 +5,8 @@ BEGIN;
 SET LOCAL ROLE pos_app;
 SELECT set_config('app.tenant_id', 'd0000000-0000-0000-0000-000000000001', true);
 
-INSERT INTO tenants (id, legal_name, org_number, vat_number)
-VALUES ('d0000000-0000-0000-0000-000000000001', 'Demo Restaurang AB', '5566778899', 'SE556677889901')
+INSERT INTO tenants (id, legal_name, org_number, vat_number, status)
+VALUES ('d0000000-0000-0000-0000-000000000001', 'Demo Restaurang AB', '5566778899', 'SE556677889901', 'active')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO restaurants (id, tenant_id, name, address)
@@ -61,6 +61,19 @@ INSERT INTO memberships (tenant_id, user_id, role, pin_hash) VALUES
    'scrypt$13390a46446428ce6c180ac93edfcba0$72de335c70722d3ff26ef507709fea034e34493a4f74b240086dd9f0aedb0174')
 ON CONFLICT (tenant_id, user_id) DO UPDATE SET pin_hash = EXCLUDED.pin_hash, role = EXCLUDED.role;
 
+-- Anna also logs in to the back office: anna@demo.local / demo-anna-2026
+UPDATE users SET password_hash = 'scrypt$2745c53b6bf8f689845cbc5265231cd0$abe3878c3a73aee5188bf62c5f23d4dad3aa747c7ffb4db631c8de480bdd65c2'
+WHERE id = 'd0000000-0000-0000-0000-000000000f01' AND password_hash IS NULL;
+
 COMMIT;
+
+-- Demo platform admin: admin@demo.local / demo-admin-2026. Written as the database owner,
+-- like `pnpm platform:admin`, because the app role cannot write platform_admins.
+INSERT INTO users (id, email, display_name, password_hash)
+VALUES ('d0000000-0000-0000-0000-0000000000ad', 'admin@demo.local', 'Plattformsadmin',
+        'scrypt$355d646fd93de2a6a4a9ad60b2973f4a$0dfe1e178d68c41baa9aaa0ce596954c5a733f576b7d0b1e45d6b7dcf08a757b')
+ON CONFLICT DO NOTHING;
+INSERT INTO platform_admins (user_id) VALUES ('d0000000-0000-0000-0000-0000000000ad') ON CONFLICT DO NOTHING;
 \echo 'Seeded: tenant d0000000-0000-0000-0000-000000000001, register d0000000-0000-0000-0000-0000000000c1'
-\echo 'Staff: Anna (manager) PIN 1234, Erik (cashier) PIN 0000'
+\echo 'Till: Anna (manager) PIN 1234, Erik (cashier) PIN 0000'
+\echo 'Back office: anna@demo.local / demo-anna-2026 (manager), admin@demo.local / demo-admin-2026 (platform admin)'

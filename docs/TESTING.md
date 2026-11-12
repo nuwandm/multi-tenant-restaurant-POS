@@ -26,6 +26,12 @@ Run these in a PowerShell terminal in the project folder.
     - **X-rapport:** totals since the last Z report; nothing is closed.
     - **Z-rapport:** closes the period with a Z number. Sell again and take another Z: it only contains the new sales, and the grand totals keep growing.
 
+11. **Back office (`pnpm dev:backoffice`, http://localhost:5174):**
+    - **As a platform admin:** log in as `admin@demo.local` / `demo-admin-2026` → **Plattform** lists every company with status and usage, and lets you approve or suspend.
+    - **As a manager:** log in as `anna@demo.local` / `demo-anna-2026` → **Översikt** (today's sales), **Restauranger & kassor**, **Meny** (click a name or price to change it), **Personal**, **Z-rapporter**, **Ändringslogg**.
+    - **As a new owner:** log out → **Registrera ditt företag**. The company is _pending_: set up menu, staff and a register, then approve it as the platform admin.
+    - Create your own platform admin: `pnpm platform:admin you@example.com "Your Name"` prints a one-time password.
+
 After the first time, `pnpm db:up` and `pnpm test` are enough.
 
 ## Troubleshooting
