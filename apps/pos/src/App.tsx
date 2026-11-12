@@ -3,7 +3,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { createReceipt, getHealth, getMenu, type Article, type Menu, type Receipt } from './api';
 import { CashDialog } from './CashDialog';
 import { formatKr } from './format';
+import { ReceiptsDialog } from './ReceiptsDialog';
 import { ReceiptView } from './ReceiptView';
+import { ReportDialog } from './ReportDialog';
 
 interface BasketLine {
   article: Article;
@@ -23,6 +25,8 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ receipt: Receipt; changeOre: number } | null>(null);
+  const [receiptsOpen, setReceiptsOpen] = useState(false);
+  const [report, setReport] = useState<'x' | 'z' | null>(null);
 
   useEffect(() => {
     getMenu()
@@ -98,8 +102,9 @@ export function App() {
   }
 
   function newSale() {
+    // Copies and returns are made from the receipts dialog and leave an open order alone.
+    if (done?.receipt.kind === 'sale' || done?.receipt.kind === 'training') setBasket([]);
     setDone(null);
-    setBasket([]);
   }
 
   if (loadError) {
@@ -135,6 +140,17 @@ export function App() {
           <span className="muted"> · {menu.register.designation}</span>
         </div>
         <div className="topbar-right">
+          <div className="tools">
+            <button type="button" onClick={() => setReceiptsOpen(true)}>
+              Kvitton
+            </button>
+            <button type="button" onClick={() => setReport('x')}>
+              X-rapport
+            </button>
+            <button type="button" onClick={() => setReport('z')}>
+              Z-rapport
+            </button>
+          </div>
           <label className="toggle">
             <input
               type="checkbox"
@@ -249,6 +265,16 @@ export function App() {
         </aside>
       </main>
 
+      {receiptsOpen && (
+        <ReceiptsDialog
+          onClose={() => setReceiptsOpen(false)}
+          onDone={(receipt) => {
+            setReceiptsOpen(false);
+            setDone({ receipt, changeOre: 0 });
+          }}
+        />
+      )}
+      {report && <ReportDialog type={report} onClose={() => setReport(null)} />}
       {cashOpen && (
         <CashDialog
           totalOre={total}

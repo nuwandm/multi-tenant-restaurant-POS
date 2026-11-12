@@ -8,15 +8,21 @@ interface Props {
   onNewSale: () => void;
 }
 
+const BANNERS: Partial<Record<Receipt['kind'], string>> = {
+  training: 'TRÄNINGSKVITTO – EJ GILTIGT',
+  copy: 'KOPIA',
+  return: 'RETURKVITTO',
+};
+
 /** On-screen receipt. Field layout to be checked against SKVFS 2014:9 before printing for real. */
 export function ReceiptView({ receipt, restaurantName, changeOre, onNewSale }: Props) {
-  const training = receipt.kind === 'training';
+  const banner = BANNERS[receipt.kind];
 
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-label="Kvitto">
       <div className="dialog receipt-dialog">
         <div className="receipt">
-          {training && <p className="receipt-banner">TRÄNINGSKVITTO – EJ GILTIGT</p>}
+          {banner && <p className="receipt-banner">{banner}</p>}
           <p className="receipt-seller">{receipt.seller.legalName}</p>
           <p>{restaurantName}</p>
           <p>Org.nr {receipt.seller.orgNumber.replace(/^(\d{6})/, '$1-')}</p>

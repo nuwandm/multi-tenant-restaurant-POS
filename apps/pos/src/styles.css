@@ -392,6 +392,117 @@ button:disabled {
   font-size: 1rem;
 }
 
+.tools {
+  display: flex;
+  gap: 6px;
+}
+
+.tools button {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.dialog.wide {
+  width: min(560px, 100%);
+}
+
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.receipt-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.receipt-list button {
+  display: grid;
+  grid-template-columns: 110px 60px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 8px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+
+.receipt-list .amount {
+  font-weight: 600;
+  text-align: right;
+}
+
+.kind {
+  font-size: 0.8rem;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  text-align: center;
+}
+
+.kind-return {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.kind-training,
+.kind-copy {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.detail-lines {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.detail-lines li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.return-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.method-choice {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.method-choice button {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.method-choice button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.full {
+  width: 100%;
+  margin-top: 12px;
+}
+
 /* Receipt */
 
 .receipt {

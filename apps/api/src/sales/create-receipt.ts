@@ -1,41 +1,33 @@
-import { randomUUID } from 'node:crypto';
 import type { ControlSystem } from '@pos/control-system';
 import {
+  buildCopy,
   buildReceipt,
-  createJournalEvent,
+  buildReturn,
   ore,
-  type BuiltReceipt,
   type PaymentMethod,
   type VatRate,
 } from '@pos/domain';
 import type { Sql, TransactionSql } from 'postgres';
 import { withTenant } from '../db/tenant';
 import { HttpError } from '../errors';
+import { loadReceipts, type LoadedReceipt } from './load-receipts';
+import { lockRegister } from './register';
+import { storeReceipt, type StoredReceipt } from './store-receipt';
+
+type Deps = { sql: Sql; controlSystem: ControlSystem };
+type PaymentRequest = { method: PaymentMethod; amountOre: number }[];
 
 export interface CreateReceiptRequest {
   kind: 'sale' | 'training' | 'proforma';
   /** Prices, names and VAT rates come from the menu; the client sends only what and how many. */
   lines: { articleId: string; quantity: number; discountOre?: number }[];
-  payments: { method: PaymentMethod; amountOre: number }[];
+  payments: PaymentRequest;
 }
 
-export interface CreatedReceipt extends BuiltReceipt {
-  id: string;
-  receiptNumber: number;
-  createdAt: Date;
-  controlCode: string;
-  signedAt: Date;
-  seller: { legalName: string; orgNumber: string };
-  register: { id: string; designation: string };
-}
-
-interface RegisterRow {
-  restaurant_id: string;
-  designation: string;
-  status: 'active' | 'retired';
-  control_system_ref: string | null;
-  legal_name: string;
-  org_number: string;
+export interface CreateReturnRequest {
+  originalReceiptId: string;
+  lines: { lineNo: number; quantity: number }[];
+  payments: PaymentRequest;
 }
 
 interface ArticleRow {
@@ -47,117 +39,91 @@ interface ArticleRow {
   active: boolean;
 }
 
-/**
- * Creates a receipt in one transaction: allocate the next number, sign with the control
- * system, store the receipt and its journal event, commit. Any failure, signing included,
- * rolls everything back, so no number is used and no unsigned receipt exists.
- */
+const toPayments = (payments: PaymentRequest) =>
+  payments.map((p) => ({ method: p.method, amountOre: ore(p.amountOre) }));
+
+/** Sale, training or proforma receipt, priced from the register's menu. */
 export async function createReceipt(
-  deps: { sql: Sql; controlSystem: ControlSystem },
+  deps: Deps,
   tenantId: string,
   registerId: string,
   request: CreateReceiptRequest,
-): Promise<CreatedReceipt> {
+): Promise<StoredReceipt> {
   return withTenant(deps.sql, tenantId, async (tx) => {
-    const [register] = await tx<RegisterRow[]>`
-      SELECT r.restaurant_id, r.designation, r.status, r.control_system_ref,
-             t.legal_name, t.org_number
-      FROM cash_registers r JOIN tenants t ON t.id = r.tenant_id
-      WHERE r.id = ${registerId}`;
-    if (!register) throw new HttpError(404, 'register_not_found', 'Register not found');
-    if (register.status !== 'active') {
-      throw new HttpError(409, 'register_retired', 'This register is retired');
-    }
-    if (!register.control_system_ref) {
-      throw new HttpError(
-        409,
-        'register_not_enrolled',
-        'This register is not enrolled with the control system yet',
-      );
-    }
-
+    const register = await lockRegister(tx, registerId, { forSelling: true });
     const built = buildReceipt({
       kind: request.kind,
-      lines: await priceLines(tx, register.restaurant_id, request.lines),
-      payments: request.payments.map((p) => ({ method: p.method, amountOre: ore(p.amountOre) })),
+      lines: await priceLines(tx, register.restaurantId, request.lines),
+      payments: toPayments(request.payments),
     });
-
-    const id = randomUUID();
-    const createdAt = new Date();
-    const receiptNumber = await nextValue(tx, tenantId, registerId, `receipt:${request.kind}`);
-
-    const signed = await deps.controlSystem.signReceipt({
-      idempotencyKey: id,
-      controlSystemRef: register.control_system_ref,
-      orgNumber: register.org_number,
-      receiptNumber,
-      kind: request.kind,
-      createdAt,
-      totalInclVatOre: built.totalOre,
-      vatTotalsOre: Object.fromEntries(built.vatTotals.map((v) => [v.vatRate, v.vatOre])),
-    });
-
-    await tx`
-      INSERT INTO receipts (id, tenant_id, register_id, kind, receipt_number, total_incl_vat_ore,
-                            cash_rounding_ore, control_code, signed_at, created_at)
-      VALUES (${id}, ${tenantId}, ${registerId}, ${request.kind}, ${receiptNumber}, ${built.totalOre},
-              ${built.cashRoundingOre}, ${signed.controlCode}, ${signed.signedAt}, ${createdAt})`;
-    await tx`
-      INSERT INTO receipt_lines ${tx(
-        built.lines.map((l) => ({
-          tenant_id: tenantId,
-          receipt_id: id,
-          line_no: l.lineNo,
-          article_id: l.articleId ?? null,
-          article_name: l.name,
-          quantity: l.quantity,
-          unit_price_ore: l.unitPriceOre,
-          vat_rate: l.vatRate,
-          discount_ore: l.discountOre,
-          line_total_ore: l.lineTotalOre,
-        })),
-      )}`;
-    await tx`
-      INSERT INTO receipt_vat_totals ${tx(
-        built.vatTotals.map((v) => ({
-          tenant_id: tenantId,
-          receipt_id: id,
-          vat_rate: v.vatRate,
-          net_ore: v.netOre,
-          vat_ore: v.vatOre,
-        })),
-      )}`;
-    if (built.payments.length > 0) {
-      await tx`
-        INSERT INTO payments ${tx(
-          built.payments.map((p) => ({
-            tenant_id: tenantId,
-            receipt_id: id,
-            method: p.method,
-            amount_ore: p.amountOre,
-          })),
-        )}`;
-    }
-
-    await appendJournalEvent(tx, tenantId, registerId, createdAt, {
-      receiptId: id,
-      kind: request.kind,
-      receiptNumber,
-      totalOre: built.totalOre,
-      controlCode: signed.controlCode,
-    });
-
-    return {
-      ...built,
-      id,
-      receiptNumber,
-      createdAt,
-      controlCode: signed.controlCode,
-      signedAt: signed.signedAt,
-      seller: { legalName: register.legal_name, orgNumber: register.org_number },
-      register: { id: registerId, designation: register.designation },
-    };
+    return storeReceipt(tx, deps.controlSystem, tenantId, register, built);
   });
+}
+
+/** Return of all or part of a sale, from any register of the same company. */
+export async function createReturn(
+  deps: Deps,
+  tenantId: string,
+  registerId: string,
+  request: CreateReturnRequest,
+): Promise<StoredReceipt> {
+  return withTenant(deps.sql, tenantId, async (tx) => {
+    const register = await lockRegister(tx, registerId, { forSelling: true });
+    // Two returns of the same receipt on different registers must not both pass the check.
+    await tx`SELECT pg_advisory_xact_lock(hashtextextended(${request.originalReceiptId}, 0))`;
+    const original = await loadOriginal(tx, request.originalReceiptId);
+    const built = buildReturn(original, {
+      lines: request.lines,
+      alreadyReturned: original.returnedQuantities,
+      payments: toPayments(request.payments),
+    });
+    return storeReceipt(tx, deps.controlSystem, tenantId, register, built, original.id);
+  });
+}
+
+/** Copy of an earlier receipt, numbered in this register's copy series. */
+export async function createCopy(
+  deps: Deps,
+  tenantId: string,
+  registerId: string,
+  originalReceiptId: string,
+): Promise<StoredReceipt> {
+  return withTenant(deps.sql, tenantId, async (tx) => {
+    const register = await lockRegister(tx, registerId, { forSelling: true });
+    const original = await loadOriginal(tx, originalReceiptId);
+    return storeReceipt(
+      tx,
+      deps.controlSystem,
+      tenantId,
+      register,
+      buildCopy(original),
+      original.id,
+    );
+  });
+}
+
+/** Most recent receipts on a register, newest first. */
+export async function listReceipts(
+  deps: Deps,
+  tenantId: string,
+  registerId: string,
+  limit: number,
+): Promise<LoadedReceipt[]> {
+  return withTenant(deps.sql, tenantId, async (tx) => {
+    const ids = await tx<{ id: string }[]>`
+      SELECT id FROM receipts WHERE register_id = ${registerId}
+      ORDER BY created_at DESC, receipt_number DESC LIMIT ${limit}`;
+    return loadReceipts(
+      tx,
+      ids.map((r) => r.id),
+    );
+  });
+}
+
+async function loadOriginal(tx: TransactionSql, id: string): Promise<LoadedReceipt> {
+  const [original] = await loadReceipts(tx, [id]);
+  if (!original) throw new HttpError(404, 'receipt_not_found', 'Receipt not found');
+  return original;
 }
 
 async function priceLines(
@@ -188,45 +154,4 @@ async function priceLines(
       ...(line.discountOre !== undefined && { discountOre: ore(line.discountOre) }),
     };
   });
-}
-
-/**
- * Next value of a gapless per-register series. The upsert row-locks the counter until the
- * transaction ends, so concurrent sales queue up and a rollback returns the number.
- */
-async function nextValue(
-  tx: TransactionSql,
-  tenantId: string,
-  registerId: string,
-  name: string,
-): Promise<number> {
-  const [row] = await tx<{ value: number }[]>`
-    INSERT INTO register_sequences (tenant_id, register_id, name, next_value)
-    VALUES (${tenantId}, ${registerId}, ${name}, 2)
-    ON CONFLICT (register_id, name) DO UPDATE SET next_value = register_sequences.next_value + 1
-    RETURNING next_value - 1 AS value`;
-  return row!.value;
-}
-
-async function appendJournalEvent(
-  tx: TransactionSql,
-  tenantId: string,
-  registerId: string,
-  occurredAt: Date,
-  payload: Record<string, string | number>,
-) {
-  const seq = await nextValue(tx, tenantId, registerId, 'journal');
-  const [prev] = await tx<{ seq: number; hash: string }[]>`
-    SELECT seq, hash FROM journal_events WHERE register_id = ${registerId} AND seq = ${seq - 1}`;
-  const event = await createJournalEvent(prev ?? null, {
-    eventType: 'receipt',
-    occurredAt,
-    payload,
-  });
-  if (event.seq !== seq) throw new Error(`Journal out of step on register ${registerId}`);
-
-  await tx`
-    INSERT INTO journal_events (tenant_id, register_id, seq, event_type, occurred_at, payload, hash, prev_hash)
-    VALUES (${tenantId}, ${registerId}, ${event.seq}, ${event.eventType}, ${event.occurredAt},
-            ${tx.json(event.payload)}, ${event.hash}, ${event.prevHash})`;
 }

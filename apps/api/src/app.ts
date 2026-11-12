@@ -4,6 +4,7 @@ import { ReceiptError } from '@pos/domain';
 import type { Sql } from 'postgres';
 import { HttpError } from './errors';
 import { menuRoutes } from './menu/routes';
+import { reportRoutes } from './reports/routes';
 import { salesRoutes } from './sales/routes';
 
 export interface AppDeps {
@@ -41,6 +42,7 @@ export function buildApp(deps: AppDeps, options: FastifyServerOptions = {}) {
 
   menuRoutes(app, deps);
   salesRoutes(app, deps);
+  reportRoutes(app, deps);
 
   return app;
 }

@@ -1,4 +1,11 @@
-import type { PaymentMethod, ReceiptKind, ReceiptLine, VatRate, VatTotal } from '@pos/domain';
+import type {
+  PaymentMethod,
+  ReceiptKind,
+  ReceiptLine,
+  VatRate,
+  VatTotal,
+  ZReportTotals,
+} from '@pos/domain';
 import { REGISTER_ID, TENANT_ID } from './config';
 
 export interface Article {
@@ -28,6 +35,20 @@ export interface Receipt {
   totalOre: number;
   cashRoundingOre: number;
   payments: { method: PaymentMethod; amountOre: number }[];
+  originalReceiptId: string | null;
+}
+
+/** A receipt from the list endpoint, with how much of each line has been returned. */
+export interface ListedReceipt extends Receipt {
+  returnedQuantities: Record<number, number>;
+}
+
+export interface Report extends ZReportTotals {
+  zNumber?: number;
+  periodFrom: string;
+  periodTo: string;
+  seller: { legalName: string; orgNumber: string };
+  register: { id: string; designation: string };
 }
 
 export interface NewReceipt {
@@ -68,8 +89,26 @@ export const getHealth = () =>
 
 export const getMenu = () => request<Menu>(`/registers/${REGISTER_ID}/menu`);
 
-export const createReceipt = (receipt: NewReceipt) =>
-  request<Receipt>(`/registers/${REGISTER_ID}/receipts`, {
+const post = <T>(path: string, body?: object) =>
+  request<T>(`/registers/${REGISTER_ID}/${path}`, {
     method: 'POST',
-    body: JSON.stringify(receipt),
+    ...(body && { body: JSON.stringify(body) }),
   });
+
+export const createReceipt = (receipt: NewReceipt) => post<Receipt>('receipts', receipt);
+
+export const listReceipts = (limit = 30) =>
+  request<ListedReceipt[]>(`/registers/${REGISTER_ID}/receipts?limit=${limit}`);
+
+export const createReturn = (body: {
+  originalReceiptId: string;
+  lines: { lineNo: number; quantity: number }[];
+  payments: { method: PaymentMethod; amountOre: number }[];
+}) => post<Receipt>('returns', body);
+
+export const createCopy = (originalReceiptId: string) =>
+  post<Receipt>('copies', { originalReceiptId });
+
+export const createXReport = () => post<Report>('x-reports');
+
+export const createZReport = () => post<Report>('z-reports');
