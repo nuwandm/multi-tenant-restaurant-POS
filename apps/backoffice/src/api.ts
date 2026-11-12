@@ -115,7 +115,8 @@ const ERROR_TEXT: Record<string, string> = {
   not_logged_in: 'You are logged out. Please log in again.',
   email_taken: 'An account with this email already exists.',
   org_number_taken: 'This company is already registered.',
-  invalid_org_number: 'That organisation number is not valid.',
+  invalid_org_number:
+    "This number doesn't add up. Check for a typo: the last digit is a check digit.",
   designation_taken: 'That register name is already used.',
   forbidden: 'You are not allowed to do this.',
   cannot_change_self: 'You cannot deactivate yourself or change your own role.',

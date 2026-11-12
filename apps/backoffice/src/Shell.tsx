@@ -38,6 +38,7 @@ import { FormError } from './AuthPages';
 import { Brand } from './Brand';
 import { formatOrgNumber, ROLE_LABELS } from './format';
 import { ColorSchemeToggle, LanguageToggle, useT } from './i18n';
+import { isOrgNumberOk, OrgNumberInput } from './OrgNumberInput';
 import { notifyOk } from './notify';
 import { AuditPage } from './pages/AuditPage';
 import { MenuPage } from './pages/MenuPage';
@@ -318,12 +319,9 @@ function AddCompanyDialog({
             value={form.legalName}
             onChange={set('legalName')}
           />
-          <TextInput
-            label={t('Organisation number')}
-            required
-            placeholder="556677-8899"
+          <OrgNumberInput
             value={form.orgNumber}
-            onChange={set('orgNumber')}
+            onChange={(orgNumber) => setForm((f) => ({ ...f, orgNumber }))}
           />
           <TextInput
             label={t('First restaurant')}
@@ -336,7 +334,7 @@ function AddCompanyDialog({
             <Button variant="default" onClick={onClose}>
               {t('Cancel')}
             </Button>
-            <Button type="submit" loading={busy}>
+            <Button type="submit" loading={busy} disabled={!isOrgNumberOk(form.orgNumber)}>
               {t('Register')}
             </Button>
           </Group>

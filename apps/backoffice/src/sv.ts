@@ -1,5 +1,9 @@
 /** Swedish UI text, keyed by the English text in the code. See i18n.tsx. */
 export const sv: Record<string, string> = {
+  '10 digits, e.g. 556123-4567. Sole traders use their personnummer.':
+    '10 siffror, t.ex. 556123-4567. Enskild firma använder personnumret.',
+  "This number doesn't add up. Check for a typo: the last digit is a check digit.":
+    'Numret stämmer inte. Kontrollera om det finns ett skrivfel: sista siffran är en kontrollsiffra.',
   'The page hit an unexpected error. Reloading usually fixes it.':
     'Sidan fick ett oväntat fel. Att ladda om brukar lösa det.',
   Reload: 'Ladda om',

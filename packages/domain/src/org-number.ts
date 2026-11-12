@@ -12,10 +12,13 @@ export function isValidOrgNumber(value: string): value is OrgNumber {
   return sum % 10 === 0;
 }
 
-/** Accepts "NNNNNN-NNNN", plain digits, or the 12-digit form with the "16" prefix. */
+/**
+ * Accepts "NNNNNN-NNNN", plain digits, spaces, and the 12-digit forms: "16" + org number for
+ * companies, or a sole trader's personnummer with its century (18, 19, 20).
+ */
 export function parseOrgNumber(input: string): OrgNumber {
-  let digits = input.trim().replace('-', '');
-  if (digits.length === 12 && digits.startsWith('16')) digits = digits.slice(2);
+  let digits = input.replace(/[\s-]/g, '');
+  if (digits.length === 12 && /^(16|18|19|20)/.test(digits)) digits = digits.slice(2);
   if (!isValidOrgNumber(digits)) {
     throw new RangeError(`Not a valid Swedish organisation number: "${input}"`);
   }

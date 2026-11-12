@@ -22,6 +22,10 @@ describe('parseOrgNumber', () => {
     ['556036-0793', '5560360793'],
     [' 5560360793 ', '5560360793'],
     ['16556036-0793', '5560360793'],
+    // Sole traders (enskild firma) use their personnummer, often written with the century.
+    ['19850101-0113', '8501010113'],
+    ['200102030459', '0102030459'],
+    ['556036 0793', '5560360793'],
   ])('normalises %j to %s', (input, expected) => {
     expect(parseOrgNumber(input)).toBe(expected);
   });

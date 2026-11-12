@@ -16,6 +16,7 @@ import { useState, type FormEvent } from 'react';
 import { api } from './api';
 import { AuthLayout } from './AuthLayout';
 import { useT } from './i18n';
+import { isOrgNumberOk, OrgNumberInput } from './OrgNumberInput';
 import { ForgotPasswordForm } from './LinkPages';
 import { useAction } from './useLoad';
 
@@ -179,12 +180,9 @@ function SignupForm({ onLoggedIn, onLogin }: Props & { onLogin: () => void }) {
           value={form.legalName}
           onChange={set('legalName')}
         />
-        <TextInput
-          label={t('Organisation number')}
-          required
-          placeholder="556677-8899"
+        <OrgNumberInput
           value={form.orgNumber}
-          onChange={set('orgNumber')}
+          onChange={(orgNumber) => setForm((f) => ({ ...f, orgNumber }))}
         />
 
         <Divider label={t('First restaurant')} labelPosition="left" mt="xs" />
@@ -203,7 +201,7 @@ function SignupForm({ onLoggedIn, onLogin }: Props & { onLogin: () => void }) {
         </SimpleGrid>
 
         <FormError error={error} />
-        <Button type="submit" size="md" loading={busy}>
+        <Button type="submit" size="md" loading={busy} disabled={!isOrgNumberOk(form.orgNumber)}>
           {t('Create account')}
         </Button>
         <Text fz="sm" c="dimmed" ta="center">
