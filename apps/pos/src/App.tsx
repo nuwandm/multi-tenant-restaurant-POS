@@ -61,6 +61,7 @@ import {
   getMenu,
   isManager,
   listUnusedSwishPayments,
+  setTrainingMode,
   listOpenOrders,
   newAttemptKey,
   sendOpenOrder,
@@ -563,7 +564,12 @@ export function App({ staff, device, onLogout }: Props) {
                 color={training ? 'orange' : 'gray'}
                 leftSection={<IconSchool size={17} stroke={1.7} />}
                 disabled={basket.length > 0 || trainingOnly}
-                onClick={() => setTraining((v) => !v)}
+                onClick={() => {
+                  const on = !training;
+                  setTraining(on);
+                  // The switch is part of the register's journal (SKVFS 2021:16).
+                  setTrainingMode(on).catch((err: unknown) => setError(message(err)));
+                }}
                 visibleFrom="md"
               >
                 {t('Training')}

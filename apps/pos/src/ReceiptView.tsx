@@ -52,6 +52,7 @@ export function ReceiptView({ receipt, restaurantName, changeOre, onNewSale }: P
           <div className="center">
             <strong>{receipt.seller.legalName}</strong>
             <div>{restaurantName}</div>
+            {receipt.seller.address && <div>{receipt.seller.address}</div>}
             <div>{t('Org. no. {number}', { number: org })}</div>
           </div>
           <hr />

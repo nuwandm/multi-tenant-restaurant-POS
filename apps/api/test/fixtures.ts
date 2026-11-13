@@ -40,7 +40,8 @@ export async function createTenant(
   const base = await withTenant(sql, tenantId, async (tx) => {
     await tx`INSERT INTO tenants (id, legal_name, org_number, status) VALUES (${tenantId}, ${'Restaurang ' + orgNumber}, ${orgNumber}, 'active')`;
     const [restaurant] = await tx<{ id: string }[]>`
-      INSERT INTO restaurants (tenant_id, name) VALUES (${tenantId}, 'Main') RETURNING id`;
+      INSERT INTO restaurants (tenant_id, name, address)
+      VALUES (${tenantId}, 'Main', 'Storgatan 1, Stockholm') RETURNING id`;
     const registerId = await insertRegister(tx, tenantId, restaurant!.id, designation);
     return { tenantId, restaurantId: restaurant!.id, registerId };
   });
@@ -134,8 +135,10 @@ export async function insertRegister(
   controlSystemRef: string | null = `FAKE-REF-${designation}`,
 ): Promise<string> {
   const [register] = await tx<{ id: string }[]>`
-    INSERT INTO cash_registers (tenant_id, restaurant_id, designation, control_system_ref)
-    VALUES (${tenantId}, ${restaurantId}, ${designation}, ${controlSystemRef}) RETURNING id`;
+    INSERT INTO cash_registers
+      (tenant_id, restaurant_id, designation, control_system_ref, control_system_serial)
+    VALUES (${tenantId}, ${restaurantId}, ${designation}, ${controlSystemRef},
+            ${controlSystemRef ? 'FAKE0000000000001' : null}) RETURNING id`;
   return register!.id;
 }
 

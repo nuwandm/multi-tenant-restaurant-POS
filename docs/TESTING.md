@@ -49,6 +49,11 @@ Run these in a PowerShell terminal in the project folder.
     - **Money without a receipt:** take a Swish payment, tap **Guest pays**, then reload the page before the receipt appears. The till still has the money: an orange notice says so, and the next Swish charge for the same amount uses it. In the back office, **Sales** lists it under _Swish payments without a receipt_ with a **Refund** button.
     - No money moves: `SWISH_MODE` is `simulator` unless you set it (see `.env.example`).
 
+14. **Journal export for Skatteverket (run `pnpm db:migrate` first):**
+    - Back office → **Restaurants & registers** → pencil next to the restaurant → add the address. Without it the till refuses to sell.
+    - At the till: log in, sell, switch training mode on and off, print a copy, make a return, take an X and a Z report, log out.
+    - Back office → **Journal export** → pick the restaurant, today, **Download XML**. The file contains every one of those events and has passed Skatteverket’s schema check.
+
 After the first time, `pnpm db:up` and `pnpm test` are enough.
 
 ## Troubleshooting

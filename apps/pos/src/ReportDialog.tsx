@@ -118,6 +118,11 @@ export function ReportDialog({ type, onClose }: Props) {
               ore={report.returnsTotalOre}
             />
             <Row label={t('Net sales')} ore={report.netTotalOre} bold />
+            <Row label={t('Discounts')} ore={report.discountTotalOre} />
+            <div className="row">
+              <span>{t('Items sold')}</span>
+              <span>{report.itemsSoldCount}</span>
+            </div>
             <hr />
             {report.totalsByVat.length === 0 && <div>{t('No VAT')}</div>}
             {report.totalsByVat.map((v) => (
@@ -155,6 +160,15 @@ export function ReportDialog({ type, onClose }: Props) {
               <span>{t('Drawer openings')}</span>
               <span>{report.drawerOpenCount}</span>
             </div>
+            <Row label={t('Cash float')} ore={report.floatOre} />
+            <Row
+              label={t('Deleted items ({count})', { count: report.reducingCount })}
+              ore={report.reducingTotalOre}
+            />
+            <Row
+              label={t('Unfinished sales ({count})', { count: report.unfinishedCount })}
+              ore={report.unfinishedTotalOre}
+            />
             <hr />
             <Row label={t('Grand total sales')} ore={report.grandTotals.salesOre} />
             <Row label={t('Grand total returns')} ore={report.grandTotals.returnsOre} />

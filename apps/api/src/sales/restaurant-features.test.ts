@@ -47,6 +47,7 @@ async function setUpShop(adminToken: string): Promise<Shop> {
       legalName: 'Pizzeria AB',
       orgNumber: randomOrgNumber(),
       restaurantName: 'Pizzeria',
+      restaurantAddress: 'Hamngatan 3, Malmö',
     },
   });
   const { token: owner, tenantId } = signup.json();

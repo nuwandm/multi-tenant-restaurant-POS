@@ -49,6 +49,7 @@ Workspace packages are consumed as TypeScript source; there is no build step for
 - Prices of options and discounts are computed only on the server (apps/api/src/sales/pricing.ts). Order discounts are spread over the lines with `allocateDiscount` so VAT per rate stays exact.
 - Table orders live in `open_orders` (with a `version` for optimistic locking). Paying with `openOrderId` consumes the paid quantities in the same transaction as the receipt. Kitchen tickets are per station and made when an order is sent, or at sale for quick sales.
 - Money columns end in `_ore` and are bigint.
+- The journal export (apps/api/src/journal, packages/domain/src/journal-export.ts) follows Skatteverket's schema in docs/compliance/xml-schema; every file is validated against it before it is handed out. New journal event types need a mapping there. Selling needs the restaurant address, and each receipt stores the seller as printed.
 - Swish goes through `SwishClient` in AppDeps (`SimulatedSwish` by default, `HttpSwish` for Swish's test environment or production via `SWISH_MODE`). Where a restaurant has a `swish_number`, a sale's Swish payment must name a `payment_attempts` row that Swish confirmed as paid, for the same amount and not used before (`claimSwishPayments`). Callbacks are only a hint: the API always asks Swish itself. A return of a sale paid through Swish must carry a Swish refund that Swish has paid (`claimSwishRefunds`); refunds are `payment_attempts` rows with `kind = 'refund'`, and pending or paid refunds never add up to more than the payment.
 
 ## Workflow

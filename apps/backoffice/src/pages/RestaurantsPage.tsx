@@ -25,18 +25,20 @@ import {
   IconDots,
   IconLink,
   IconMapPin,
+  IconPencil,
   IconPlus,
   IconPower,
   IconUnlink,
 } from '@tabler/icons-react';
 import { useEffect, useState, type FormEvent } from 'react';
-import { api, type Register } from '../api';
+import { api, type Register, type Restaurant } from '../api';
 import { useConfirm } from '../confirm';
 import { formatDateTime, formatOrgNumber, STATUS_LABELS } from '../format';
 import { useT } from '../i18n';
 import { notifyOk } from '../notify';
 import { PageHeader } from '../PageHeader';
 import { useAction, useLoad } from '../useLoad';
+import { EditRestaurantDialog } from './EditRestaurantDialog';
 import { SwishSection } from './SwishSection';
 import { TablesSection } from './TablesSection';
 import { TableSkeleton } from './TableSkeleton';
@@ -50,6 +52,7 @@ export function RestaurantsPage({ tenantId }: { tenantId: string }) {
   const { data, error, reload } = useLoad(() => api.restaurants(tenantId), [tenantId]);
   const action = useAction({ toast: true });
   const [addingRestaurant, setAddingRestaurant] = useState(false);
+  const [editing, setEditing] = useState<Restaurant | null>(null);
   const [pairing, setPairing] = useState<{
     code: string;
     expiresAt: string;
@@ -143,13 +146,28 @@ export function RestaurantsPage({ tenantId }: { tenantId: string }) {
                   <Text fw={650} fz="lg">
                     {r.name}
                   </Text>
-                  {r.address && (
+                  {r.address ? (
                     <Group gap={4} c="dimmed">
                       <IconMapPin size={13} />
                       <Text fz="xs">{r.address}</Text>
                     </Group>
+                  ) : (
+                    <Group gap={4} c="orange">
+                      <IconMapPin size={13} />
+                      <Text fz="xs">
+                        {t('No address: the tills cannot sell until it is added.')}
+                      </Text>
+                    </Group>
                   )}
                 </div>
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  aria-label={t('Edit restaurant')}
+                  onClick={() => setEditing(r)}
+                >
+                  <IconPencil size={16} />
+                </ActionIcon>
               </Group>
               <Badge variant="default" radius="sm">
                 {t('{count} registers', {
@@ -300,6 +318,17 @@ export function RestaurantsPage({ tenantId }: { tenantId: string }) {
           reload();
         }}
       />
+      {editing && (
+        <EditRestaurantDialog
+          tenantId={tenantId}
+          restaurant={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            reload();
+          }}
+        />
+      )}
       {pairing && (
         <PairingCodeDialog
           {...pairing}

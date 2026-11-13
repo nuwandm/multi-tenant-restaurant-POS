@@ -47,6 +47,7 @@ async function signup(overrides: Record<string, string> = {}) {
       legalName: `Olles Krog ${orgNumber} AB`,
       orgNumber,
       restaurantName: 'Olles Krog City',
+      restaurantAddress: 'Kungsgatan 5, Stockholm',
       ...overrides,
     },
   });

@@ -367,4 +367,31 @@ export const sv: Record<string, string> = {
     'Pengarna går tillbaka till gästen via Swish. Gör bara detta om gästen inte fick något kvitto för dem.',
   'The refund is on its way.': 'Återbetalningen är på väg.',
   'Try again': 'Försök igen',
+  'Add the restaurant address first.': 'Lägg till restaurangens adress först.',
+  'Add the restaurant address on Restaurants & registers first.':
+    'Lägg till restaurangens adress under Restauranger och kassor först.',
+  Address: 'Adress',
+  'All registers': 'Alla kassor',
+  'Download XML': 'Ladda ner XML',
+  'Edit restaurant': 'Ändra restaurang',
+  'Everything the registers recorded, as the XML file Skatteverket asks for during an inspection.':
+    'Allt kassorna har registrerat, som den XML-fil Skatteverket begär vid en kontroll.',
+  'Exported the journal': 'Exporterade journalen',
+  From: 'Från',
+  'Journal export': 'Journalexport',
+  'No address: the tills cannot sell until it is added.':
+    'Ingen adress: kassorna kan inte sälja förrän den är tillagd.',
+  'Nothing was registered on these registers in this period.':
+    'Inget registrerades på dessa kassor under perioden.',
+  'Printed on every receipt. Needed before the tills can sell.':
+    'Skrivs ut på varje kvitto. Krävs innan kassorna kan sälja.',
+  'Street and number, postcode and town': 'Gata och nummer, postnummer och ort',
+  'The export could not be made. Contact support.': 'Exporten kunde inte skapas. Kontakta support.',
+  "The export failed Skatteverket's schema check. Contact support.":
+    'Exporten klarade inte Skatteverkets schemakontroll. Kontakta support.',
+  'This restaurant has no registers to export.': 'Restaurangen har inga kassor att exportera.',
+  To: 'Till',
+  'UTF-8 XML, checked against Skatteverket’s schema.':
+    'UTF-8 XML, kontrollerad mot Skatteverkets schema.',
+  '{name} is downloaded.': '{name} är nedladdad.',
 };

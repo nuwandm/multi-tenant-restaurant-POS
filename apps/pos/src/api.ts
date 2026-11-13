@@ -35,7 +35,7 @@ export interface Menu {
   register: { id: string; designation: string; status: 'active' | 'retired' };
   /** swish: Swish payments go through a QR code and wait for Swish to confirm. */
   restaurant: { name: string; swish: boolean };
-  seller: { legalName: string; orgNumber: string };
+  seller: { legalName: string; orgNumber: string; address?: string | null };
   /** name is null for items without a group. */
   groups: { name: string | null; articles: Article[] }[];
   tables: DiningTable[];
@@ -95,7 +95,7 @@ export interface Receipt {
   receiptNumber: number;
   createdAt: string;
   controlCode: string;
-  seller: { legalName: string; orgNumber: string };
+  seller: { legalName: string; orgNumber: string; address?: string | null };
   register: { id: string; designation: string };
   lines: ReceiptLine[];
   vatTotals: VatTotal[];
@@ -115,9 +115,14 @@ export interface ListedReceipt extends Receipt {
 
 export interface Report extends ZReportTotals {
   zNumber?: number;
+  floatOre: number;
+  reducingCount: number;
+  reducingTotalOre: number;
+  unfinishedCount: number;
+  unfinishedTotalOre: number;
   periodFrom: string;
   periodTo: string;
-  seller: { legalName: string; orgNumber: string };
+  seller: { legalName: string; orgNumber: string; address?: string | null };
   register: { id: string; designation: string };
 }
 
@@ -157,6 +162,8 @@ const ERROR_TEXT: Record<string, string> = {
   forbidden: 'Only a manager or owner can do this.',
   wrong_register: 'You are logged in on another register.',
   control_system_unavailable: 'The control system is not responding. No receipt was created.',
+  restaurant_address_missing:
+    'This restaurant has no address yet. Receipts must show it: add it in the back office.',
   swish_not_set_up: 'This restaurant has no Swish number yet. Add it in the back office.',
   swish_not_paid: 'Swish has not confirmed the payment. No receipt was created.',
   swish_already_used: 'This Swish payment is already on a receipt.',
@@ -441,3 +448,6 @@ export async function refundThroughSwish(originalReceiptId: string, amountOre: n
     'swish_refund_failed',
   );
 }
+
+/** Training mode on or off; the switch goes into the register's journal. */
+export const setTrainingMode = (on: boolean) => post<void>('training-mode', { on });

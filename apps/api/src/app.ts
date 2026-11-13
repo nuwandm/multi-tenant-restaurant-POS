@@ -6,6 +6,7 @@ import { adminRoutes } from './admin/routes';
 import { authRoutes } from './auth/routes';
 import { HttpError } from './errors';
 import { ConsoleMailer, type Mailer } from './mail/mailer';
+import { journalRoutes } from './journal/routes';
 import { menuRoutes } from './menu/routes';
 import { reportRoutes } from './reports/routes';
 import { swishRoutes } from './payments/routes';
@@ -67,6 +68,7 @@ export function buildApp(
   orderRoutes(app, deps);
   reportRoutes(app, deps);
   swishRoutes(app, deps);
+  journalRoutes(app, deps);
 
   return app;
 }

@@ -23,6 +23,7 @@ import {
   IconChartBar,
   IconChevronDown,
   IconFileAnalytics,
+  IconFileCode,
   IconHistory,
   IconLayoutDashboard,
   IconLogout,
@@ -42,6 +43,7 @@ import { ColorSchemeToggle, LanguageToggle, useT } from './i18n';
 import { isOrgNumberOk, OrgNumberInput } from './OrgNumberInput';
 import { notifyOk } from './notify';
 import { AuditPage } from './pages/AuditPage';
+import { JournalExportPage } from './pages/JournalExportPage';
 import { MenuPage } from './pages/MenuPage';
 import { OverviewPage } from './pages/OverviewPage';
 import { PlatformPage } from './pages/PlatformPage';
@@ -58,6 +60,7 @@ const COMPANY_PAGES = {
   menu: 'Menu',
   staff: 'Staff',
   z: 'Z reports',
+  journal: 'Journal export',
   audit: 'Change log',
 } as const;
 
@@ -67,6 +70,7 @@ const PAGE_ICONS: Record<keyof typeof COMPANY_PAGES, Icon> = {
   menu: IconToolsKitchen2,
   staff: IconUsers,
   z: IconFileAnalytics,
+  journal: IconFileCode,
   audit: IconHistory,
 };
 
@@ -226,6 +230,7 @@ export function Shell({ me, onChanged, onLogout }: Props) {
             />
           )}
           {company && page === 'z' && <ZReportsPage tenantId={company.tenantId} />}
+          {company && page === 'journal' && <JournalExportPage tenantId={company.tenantId} />}
           {company && page === 'audit' && <AuditPage tenantId={company.tenantId} />}
           {!company && page !== 'overview' && page !== 'platform' && (
             <Text c="dimmed">{t('You do not manage any company yet.')}</Text>

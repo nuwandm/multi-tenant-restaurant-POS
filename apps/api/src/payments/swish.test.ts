@@ -52,6 +52,7 @@ beforeAll(async () => {
         legalName: 'Soppkök AB',
         orgNumber: randomOrgNumber(),
         restaurantName: 'Soppköket',
+        restaurantAddress: 'Torget 2, Lund',
       },
     })
   ).json();

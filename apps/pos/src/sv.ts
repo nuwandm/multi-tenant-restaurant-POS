@@ -280,4 +280,10 @@ export const sv: Record<string, string> = {
     'Swish har inte betalat ut återbetalningen än. Försök igen om en minut.',
   'Swish did not pay out the refund. Try again, or refund with cash or card.':
     'Swish betalade inte ut återbetalningen. Försök igen, eller återbetala kontant eller med kort.',
+  'Cash float': 'Växelkassa',
+  'Deleted items ({count})': 'Raderade artiklar ({count})',
+  'Items sold': 'Antal sålda varor',
+  'This restaurant has no address yet. Receipts must show it: add it in the back office.':
+    'Restaurangen saknar adress. Kvitton måste visa den: lägg till den i backoffice.',
+  'Unfinished sales ({count})': 'Oavslutade försäljningar ({count})',
 };

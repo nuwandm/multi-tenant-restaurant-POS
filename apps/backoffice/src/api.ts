@@ -158,6 +158,11 @@ export interface PlatformCompany {
 
 const ERROR_TEXT: Record<string, string> = {
   invalid_login: 'Wrong email or password.',
+  journal_empty: 'Nothing was registered on these registers in this period.',
+  journal_export_failed: 'The export could not be made. Contact support.',
+  journal_export_invalid: "The export failed Skatteverket's schema check. Contact support.",
+  restaurant_address_missing: 'Add the restaurant address first.',
+  no_registers: 'This restaurant has no registers to export.',
   login_locked: 'Too many failed attempts. Wait 15 minutes.',
   no_backoffice_access: 'This account has no back office access.',
   not_logged_in: 'You are logged out. Please log in again.',
@@ -229,6 +234,29 @@ async function request<T>(method: string, path: string, body?: object): Promise<
     );
   }
   return data as T;
+}
+
+/** Downloads a file (e.g. an XML export) with the login token; errors read like request(). */
+async function download(path: string): Promise<{ blob: Blob; fileName: string }> {
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, {
+      headers: token ? { authorization: `Bearer ${token}` } : {},
+    });
+  } catch {
+    throw new Error('Cannot reach the server. Check that the API is running (pnpm dev:api).');
+  }
+  if (!res.ok) {
+    const data = (await res.json().catch(() => null)) as {
+      error?: string;
+      message?: string;
+    } | null;
+    throw new Error(
+      (data?.error && ERROR_TEXT[data.error]) ?? data?.message ?? `Server error (${res.status})`,
+    );
+  }
+  const name = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '');
+  return { blob: await res.blob(), fileName: name?.[1] ?? 'export.xml' };
 }
 
 const get = <T>(path: string) => request<T>('GET', path);
@@ -354,6 +382,15 @@ export const api = {
     post(`${t(tenantId)}/restaurants/${restaurantId}/tables`, { name }),
   updateTable: (tenantId: string, tableId: string, body: { name?: string; active?: boolean }) =>
     patch(`${t(tenantId)}/tables/${tableId}`, body),
+
+  journalExport: (
+    tenantId: string,
+    q: { restaurantId: string; registerIds: string[]; from: string; to: string },
+  ) =>
+    download(
+      `${t(tenantId)}/journal-export?restaurantId=${q.restaurantId}&from=${q.from}&to=${q.to}` +
+        (q.registerIds.length > 0 ? `&registerIds=${q.registerIds.join(',')}` : ''),
+    ),
 
   unusedSwish: (tenantId: string) =>
     get<UnusedSwishPayment[]>(`${t(tenantId)}/swish-payments/unused`),
