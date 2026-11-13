@@ -355,4 +355,16 @@ export const sv: Record<string, string> = {
   Remove: 'Ta bort',
   'The till shows guests a QR code and makes the receipt once Swish confirms payment.':
     'Kassan visar gästen en QR-kod och skapar kvittot när Swish har bekräftat betalningen.',
+  Refund: 'Återbetala',
+  'Refund failed': 'Återbetalningen misslyckades',
+  'Refund on its way': 'Återbetalning på väg',
+  'Refund {amount}?': 'Återbetala {amount}?',
+  'Refunded a Swish payment': 'Återbetalade en Swish-betalning',
+  'Swish payments without a receipt': 'Swish-betalningar utan kvitto',
+  'The guest paid, but no receipt was made. The till uses the money again for the same amount; otherwise refund it.':
+    'Gästen betalade, men inget kvitto skapades. Kassan använder pengarna igen för samma belopp; annars återbetala dem.',
+  'The money goes back to the guest through Swish. Only do this if the guest did not get a receipt for it.':
+    'Pengarna går tillbaka till gästen via Swish. Gör bara detta om gästen inte fick något kvitto för dem.',
+  'The refund is on its way.': 'Återbetalningen är på väg.',
+  'Try again': 'Försök igen',
 };

@@ -11,7 +11,7 @@ import type { Sql, TransactionSql } from 'postgres';
 import type { StaffSession } from '../auth/session';
 import { withTenant } from '../db/tenant';
 import { HttpError } from '../errors';
-import { claimSwishPayments } from '../payments/swish-payments';
+import { claimSwishPayments, claimSwishRefunds, swishRefundable } from '../payments/swish-payments';
 import { loadReceipts, type LoadedReceipt } from './load-receipts';
 import { consumeOpenOrder } from './open-orders';
 import { createKitchenTickets, priceLines, type LineRequest, type PricedLine } from './pricing';
@@ -36,7 +36,8 @@ export interface CreateReceiptRequest {
 export interface CreateReturnRequest {
   originalReceiptId: string;
   lines: { lineNo: number; quantity: number }[];
-  payments: PaymentRequest;
+  /** A Swish payment names the refund Swish paid. */
+  payments: { method: PaymentMethod; amountOre: number; swishRefundId?: string }[];
 }
 
 const toPayments = (payments: PaymentRequest) =>
@@ -145,6 +146,7 @@ export async function createReturn(
     // Two returns of the same receipt on different registers must not both pass the check.
     await tx`SELECT pg_advisory_xact_lock(hashtextextended(${request.originalReceiptId}, 0))`;
     const original = await loadOriginal(tx, request.originalReceiptId);
+    const linkSwish = await claimSwishRefunds(tx, staff, original.id, request.payments);
     return {
       built: buildReturn(original, {
         lines: request.lines,
@@ -152,6 +154,7 @@ export async function createReturn(
         payments: toPayments(request.payments),
       }),
       originalReceiptId: original.id,
+      after: (stored) => linkSwish(stored.id),
     };
   });
 }
@@ -169,20 +172,28 @@ export async function createCopy(
   });
 }
 
-/** Most recent receipts on the staff member's register, newest first. */
+/**
+ * Most recent receipts on the staff member's register, newest first, with how much Swish money
+ * each can still give back.
+ */
 export async function listReceipts(
   deps: Deps,
   staff: StaffSession,
   limit: number,
-): Promise<LoadedReceipt[]> {
+): Promise<(LoadedReceipt & { swishRefundableOre: number })[]> {
   return withTenant(deps.sql, staff.tenantId, async (tx) => {
     const ids = await tx<{ id: string }[]>`
       SELECT id FROM receipts WHERE register_id = ${staff.registerId}
       ORDER BY created_at DESC, receipt_number DESC LIMIT ${limit}`;
-    return loadReceipts(
+    const receipts = await loadReceipts(
       tx,
       ids.map((r) => r.id),
     );
+    const refundable = await swishRefundable(
+      tx,
+      receipts.map((r) => r.id),
+    );
+    return receipts.map((r) => ({ ...r, swishRefundableOre: refundable.get(r.id) ?? 0 }));
   });
 }
 

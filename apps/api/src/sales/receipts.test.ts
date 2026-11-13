@@ -83,7 +83,7 @@ describe('POST /registers/:id/receipts', () => {
       seller: { orgNumber: expect.stringMatching(/^\d{10}$/) },
       totalOre: 41300,
       cashRoundingOre: 0,
-      controlCode: 'FAKE-FAKE-REF-KASSA-1-sale-1',
+      controlCode: 'FAKE-FAKE-REF-KASSA-1-sale-1-'.padEnd(59, 'X'),
       vatTotals: [
         { vatRate: 25, grossOre: 11500, netOre: 9200, vatOre: 2300 },
         { vatRate: 12, grossOre: 29800, netOre: 26607, vatOre: 3193 },

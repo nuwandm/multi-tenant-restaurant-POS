@@ -154,8 +154,9 @@ export async function createOpenOrder(
     checkTotal(lines, discount);
     try {
       const [row] = await tx<{ id: string }[]>`
-        INSERT INTO open_orders (tenant_id, restaurant_id, table_id, created_by, lines, order_discount_ore)
-        VALUES (${staff.tenantId}, ${restaurant}, ${body.tableId}, ${staff.userId},
+        INSERT INTO open_orders
+          (tenant_id, restaurant_id, register_id, table_id, created_by, lines, order_discount_ore)
+        VALUES (${staff.tenantId}, ${restaurant}, ${staff.registerId}, ${body.tableId}, ${staff.userId},
                 ${tx.json(lines as never)}, ${discount})
         RETURNING id`;
       return toOrder((await loadOrder(tx, row!.id))!);

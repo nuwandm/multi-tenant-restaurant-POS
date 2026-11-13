@@ -23,6 +23,10 @@ export interface ZReportTotals {
   totalsByVat: VatTotal[];
   totalsByPayment: Partial<Record<PaymentMethod, Ore>>;
   cashRoundingOre: Ore;
+  /** Discounts given on sales, less the discount share of returns. */
+  discountTotalOre: Ore;
+  /** Items sold, less items returned. Every item counts as goods (varor). */
+  itemsSoldCount: number;
   counts: Record<ReceiptKind, number>;
   copyTotalOre: Ore;
   trainingTotalOre: Ore;
@@ -78,6 +82,13 @@ export function aggregateZReport(input: ZReportInput): ZReportTotals {
       })),
     totalsByPayment,
     cashRoundingOre: addOre(...turnover.map((r) => r.cashRoundingOre)),
+    // A line's discount is always ≥ 0; its sign follows the quantity, negative on returns.
+    discountTotalOre: ore(
+      turnover
+        .flatMap((r) => r.lines)
+        .reduce((sum, l) => sum + Math.sign(l.quantity) * l.discountOre, 0),
+    ),
+    itemsSoldCount: turnover.flatMap((r) => r.lines).reduce((sum, l) => sum + l.quantity, 0),
     counts: {
       sale: sales.length,
       return: returns.length,

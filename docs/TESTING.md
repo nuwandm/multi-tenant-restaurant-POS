@@ -45,6 +45,8 @@ Run these in a PowerShell terminal in the project folder.
     - Back office → **Restaurants & registers** → **Add Swish number** → `1231181189` (any 10 digits starting with 123 work in the simulator).
     - Till: reload the page, add items, tap **Swish**. A QR code appears and the till waits. Tap **Guest pays** in the simulator box: the receipt is made. Try **Guest declines** and **Cancel payment** too.
     - **Split** → _By amount_ with one Swish part and one cash part: the QR code is shown for the Swish part only.
+    - **Refund:** as Anna, **Receipts** → pick the Swish sale → **Return…** → choose items, **Refund with Swish** → **Make return**. The money goes back through Swish first, then the return receipt is made. Refunding more than is left of the Swish payment is blocked.
+    - **Money without a receipt:** take a Swish payment, tap **Guest pays**, then reload the page before the receipt appears. The till still has the money: an orange notice says so, and the next Swish charge for the same amount uses it. In the back office, **Sales** lists it under _Swish payments without a receipt_ with a **Refund** button.
     - No money moves: `SWISH_MODE` is `simulator` unless you set it (see `.env.example`).
 
 After the first time, `pnpm db:up` and `pnpm test` are enough.

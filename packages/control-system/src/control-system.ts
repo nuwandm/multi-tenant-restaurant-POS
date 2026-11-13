@@ -15,6 +15,11 @@ export interface RegisterRegisterInput {
 
 export interface RegisterRegisterResult {
   controlSystemRef: string;
+  /**
+   * The control system's manufacturing number (tillverkningsnummer, 8 kap. 37 § SKVFS 2020:9),
+   * 17 characters. Goes into the journal export and onto receipts.
+   */
+  serialNumber: string;
 }
 
 export type ReceiptKind = 'sale' | 'return' | 'copy' | 'training' | 'proforma';
@@ -32,6 +37,7 @@ export interface SignReceiptInput {
 }
 
 export interface SignedReceipt {
+  /** 59 characters, as the journal export (SKVFS 2021:16) requires. */
   controlCode: string;
   signedAt: Date;
 }

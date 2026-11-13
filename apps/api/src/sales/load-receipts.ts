@@ -21,6 +21,7 @@ interface ReceiptRow {
   designation: string;
   legal_name: string;
   org_number: string;
+  address: string | null;
   cashier_user_id: string | null;
   cashier_name: string | null;
 }
@@ -32,10 +33,15 @@ export async function loadReceipts(tx: TransactionSql, ids: string[]): Promise<L
   const rows = await tx<ReceiptRow[]>`
     SELECT r.id, r.kind, r.receipt_number, r.original_receipt_id, r.total_incl_vat_ore,
            r.cash_rounding_ore, r.control_code, r.signed_at, r.created_at, r.register_id,
-           c.designation, t.legal_name, t.org_number, r.cashier_user_id, u.display_name AS cashier_name
+           c.designation, r.cashier_user_id, u.display_name AS cashier_name,
+           -- The seller as printed; receipts from before the snapshot use today's values.
+           coalesce(r.seller_name, t.legal_name) AS legal_name,
+           coalesce(r.seller_org_number, t.org_number) AS org_number,
+           coalesce(r.seller_address, s.address) AS address
     FROM receipts r
     JOIN cash_registers c ON c.id = r.register_id
     JOIN tenants t ON t.id = r.tenant_id
+    JOIN restaurants s ON s.id = c.restaurant_id
     LEFT JOIN users u ON u.id = r.cashier_user_id
     WHERE r.id IN ${tx(ids)}`;
   const lines = await tx<
@@ -92,7 +98,7 @@ export async function loadReceipts(tx: TransactionSql, ids: string[]): Promise<L
         signedAt: r.signed_at,
         totalOre: ore(r.total_incl_vat_ore),
         cashRoundingOre: ore(r.cash_rounding_ore),
-        seller: { legalName: r.legal_name, orgNumber: r.org_number },
+        seller: { legalName: r.legal_name, orgNumber: r.org_number, address: r.address },
         register: { id: r.register_id, designation: r.designation },
         cashier:
           r.cashier_user_id && r.cashier_name

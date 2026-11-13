@@ -2,6 +2,7 @@ import {
   aggregateZReport,
   ore,
   type BuiltReceipt,
+  type ExportReportTotals,
   type PaymentMethod,
   type ReceiptKind,
   type VatRate,
@@ -10,13 +11,22 @@ import {
 import type { Sql, TransactionSql } from 'postgres';
 import type { StaffSession } from '../auth/session';
 import { withTenant } from '../db/tenant';
+import { orderTotal, type OrderLine } from '../sales/open-orders';
 import { lockRegister, type LockedRegister } from '../sales/register';
 import { appendJournalEvent, nextValue } from '../sales/sequences';
 
 export interface Report extends ZReportTotals {
   periodFrom: Date;
   periodTo: Date;
-  seller: { legalName: string; orgNumber: string };
+  seller: { legalName: string; orgNumber: string; address: string | null };
+  /** Växelkassa. No cash float is kept yet, so 0. */
+  floatOre: number;
+  /** Other registrations that reduced the day's sales (deleted items): not registered yet. */
+  reducingCount: number;
+  reducingTotalOre: number;
+  /** Sales started on this register but not finished: its open table orders. */
+  unfinishedCount: number;
+  unfinishedTotalOre: number;
   register: { id: string; designation: string };
 }
 
@@ -31,10 +41,13 @@ export async function createXReport(sql: Sql, staff: StaffSession): Promise<Repo
   return withTenant(sql, tenantId, async (tx) => {
     const register = await lockRegister(tx, registerId, { forSelling: false });
     const report = await openPeriodReport(tx, register);
+    // X reports are not stored anywhere else, so the journal keeps all their totals.
     await appendJournalEvent(tx, tenantId, registerId, 'x_report', report.periodTo, {
+      takenBy: staff.userId,
       periodFrom: report.periodFrom.toISOString(),
       periodTo: report.periodTo.toISOString(),
       netTotalOre: report.netTotalOre,
+      totals: { ...exportTotals(report) },
     });
     return report;
   });
@@ -70,6 +83,13 @@ export async function createZReport(sql: Sql, staff: StaffSession): Promise<ZRep
         proforma_count: report.counts.proforma,
         proforma_total_ore: report.proformaTotalOre,
         drawer_open_count: report.drawerOpenCount,
+        discount_total_ore: report.discountTotalOre,
+        items_sold_count: report.itemsSoldCount,
+        float_ore: report.floatOre,
+        reducing_count: report.reducingCount,
+        reducing_total_ore: report.reducingTotalOre,
+        unfinished_count: report.unfinishedCount,
+        unfinished_total_ore: report.unfinishedTotalOre,
         grand_sales_ore: report.grandTotals.salesOre,
         grand_returns_ore: report.grandTotals.returnsOre,
         grand_total_ore: report.grandTotals.netOre,
@@ -109,8 +129,17 @@ async function openPeriodReport(tx: TransactionSql, register: LockedRegister): P
     },
   });
 
+  const open = await tx<{ lines: OrderLine[]; order_discount_ore: number }[]>`
+    SELECT lines, order_discount_ore FROM open_orders
+    WHERE register_id = ${register.id} AND status = 'open'`;
+
   return {
     ...totals,
+    floatOre: 0,
+    reducingCount: 0,
+    reducingTotalOre: 0,
+    unfinishedCount: open.length,
+    unfinishedTotalOre: open.reduce((sum, o) => sum + orderTotal(o.lines, o.order_discount_ore), 0),
     periodFrom,
     periodTo,
     seller: register.seller,
@@ -118,7 +147,7 @@ async function openPeriodReport(tx: TransactionSql, register: LockedRegister): P
   };
 }
 
-/** The receipt fields aggregateZReport needs; lines are not needed for totals. */
+/** The receipt fields aggregateZReport needs, with lines for discounts and items sold. */
 async function periodReceipts(
   tx: TransactionSql,
   registerId: string,
@@ -139,10 +168,35 @@ async function periodReceipts(
     SELECT receipt_id, vat_rate, net_ore, vat_ore FROM receipt_vat_totals WHERE receipt_id IN ${tx(ids)}`;
   const payments = await tx<{ receipt_id: string; method: PaymentMethod; amount_ore: number }[]>`
     SELECT receipt_id, method, amount_ore FROM payments WHERE receipt_id IN ${tx(ids)}`;
+  const lines = await tx<
+    {
+      receipt_id: string;
+      line_no: number;
+      article_name: string;
+      quantity: number;
+      unit_price_ore: number;
+      vat_rate: VatRate;
+      discount_ore: number;
+      line_total_ore: number;
+    }[]
+  >`
+    SELECT receipt_id, line_no, article_name, quantity, unit_price_ore, vat_rate, discount_ore,
+           line_total_ore
+    FROM receipt_lines WHERE receipt_id IN ${tx(ids)}`;
 
   return receipts.map((r) => ({
     kind: r.kind,
-    lines: [],
+    lines: lines
+      .filter((l) => l.receipt_id === r.id)
+      .map((l) => ({
+        lineNo: l.line_no,
+        name: l.article_name,
+        quantity: l.quantity,
+        unitPriceOre: ore(l.unit_price_ore),
+        vatRate: l.vat_rate,
+        discountOre: ore(l.discount_ore),
+        lineTotalOre: ore(l.line_total_ore),
+      })),
     totalOre: ore(r.total_incl_vat_ore),
     cashRoundingOre: ore(r.cash_rounding_ore),
     vatTotals: vat
@@ -157,4 +211,34 @@ async function periodReceipts(
       .filter((p) => p.receipt_id === r.id)
       .map((p) => ({ method: p.method, amountOre: ore(p.amount_ore) })),
   }));
+}
+
+/** A report's totals in the shape of the journal export (24–25 kap. SKVFS 2021:16). */
+export function exportTotals(report: Report): ExportReportTotals {
+  return {
+    totalSalesOre: report.salesTotalOre,
+    vatTotals: report.totalsByVat.map((v) => ({ vatRate: v.vatRate, vatOre: v.vatOre })),
+    floatOre: report.floatOre,
+    itemsSoldCount: report.itemsSoldCount,
+    receiptCount: report.counts.sale,
+    drawerOpenCount: report.drawerOpenCount,
+    copyCount: report.counts.copy,
+    copyTotalOre: report.copyTotalOre,
+    trainingCount: report.counts.training,
+    trainingTotalOre: report.trainingTotalOre,
+    payments: Object.entries(report.totalsByPayment).map(([method, amountOre]) => ({
+      method: method as PaymentMethod,
+      amountOre: amountOre ?? 0,
+    })),
+    returnCount: report.counts.return,
+    returnTotalOre: report.returnsTotalOre,
+    discountTotalOre: report.discountTotalOre,
+    reducingCount: report.reducingCount,
+    reducingTotalOre: report.reducingTotalOre,
+    unfinishedCount: report.unfinishedCount,
+    unfinishedTotalOre: report.unfinishedTotalOre,
+    grandSalesOre: report.grandTotals.salesOre,
+    grandReturnsOre: report.grandTotals.returnsOre,
+    grandNetOre: report.grandTotals.netOre,
+  };
 }

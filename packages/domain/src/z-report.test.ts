@@ -84,3 +84,55 @@ describe('aggregateZReport', () => {
     expect(empty.totalsByPayment).toEqual({});
   });
 });
+
+describe('aggregateZReport discounts', () => {
+  const discounted = buildReceipt({
+    kind: 'sale',
+    lines: [
+      { name: 'Pizza', quantity: 2, unitPriceOre: ore(10000), vatRate: 12, discountOre: ore(2000) },
+    ],
+    payments: [{ method: 'card', amountOre: ore(18000) }],
+  });
+  const returned = buildReturn(discounted, {
+    lines: [{ lineNo: 1, quantity: 1 }],
+    payments: [{ method: 'card', amountOre: ore(-9000) }],
+  });
+  const trainingWithDiscount = buildReceipt({
+    kind: 'training',
+    lines: [
+      { name: 'Test', quantity: 1, unitPriceOre: ore(5000), vatRate: 12, discountOre: ore(500) },
+    ],
+    payments: [{ method: 'card', amountOre: ore(4500) }],
+  });
+
+  it('totals discounts on sales, less the discount share of returns', () => {
+    const z = aggregateZReport({
+      receipts: [discounted, returned, trainingWithDiscount],
+      drawerOpenCount: 0,
+      previousGrandTotals: { salesOre: ore(0), returnsOre: ore(0) },
+    });
+    // 20 kr off two pizzas; returning one gives back its 10 kr share of the discount.
+    expect(z.discountTotalOre).toBe(2000 - 1000);
+  });
+
+  it('is zero without discounts', () => {
+    const z = aggregateZReport({
+      receipts: [burger],
+      drawerOpenCount: 0,
+      previousGrandTotals: { salesOre: ore(0), returnsOre: ore(0) },
+    });
+    expect(z.discountTotalOre).toBe(0);
+  });
+});
+
+describe('aggregateZReport items sold', () => {
+  it('counts items on sales, less items returned (7 kap. 3 § j SKVFS 2014:9)', () => {
+    const z = aggregateZReport({
+      receipts: [burger, beer, beerReturn, training, proforma, copy],
+      drawerOpenCount: 0,
+      previousGrandTotals: { salesOre: ore(0), returnsOre: ore(0) },
+    });
+    // 1 burger + 2 beers − 1 beer returned; training, quotes and copies sell nothing.
+    expect(z.itemsSoldCount).toBe(2);
+  });
+});

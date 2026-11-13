@@ -4,12 +4,14 @@ import type { AppDeps } from '../app';
 import { withTenant } from '../db/tenant';
 import { HttpError } from '../errors';
 import { uuid } from '../http-schemas';
+import { appendJournalEvent } from '../sales/sequences';
 import { hashPairingCode, requireDevice } from './device';
 import { verifyPin } from './pin';
 import {
   bearerToken,
   endSession,
   hashToken,
+  lookupSession,
   newSessionToken,
   requireStaff,
   SESSION_HOURS,
@@ -167,6 +169,11 @@ export function authRoutes(app: FastifyInstance, deps: AppDeps) {
         await tx`
           SELECT app_create_session(${tokenHash}, ${userId}, ${registerId}, ${member.role},
                                     ${expiresAt}, ${deviceId})`;
+        // Logins are part of the register's journal (30 kap. SKVFS 2021:16).
+        await appendJournalEvent(tx, tenantId, registerId, 'login', new Date(), {
+          userId,
+          displayName: member.display_name,
+        });
         return { ok: true, token, expiresAt, role: member.role, displayName: member.display_name };
       });
 
@@ -191,6 +198,16 @@ export function authRoutes(app: FastifyInstance, deps: AppDeps) {
 
   app.post('/auth/logout', async (req, reply) => {
     const token = bearerToken(req);
+    const staff = token ? await lookupSession(deps.sql, token) : null;
+    if (staff) {
+      // Logouts are part of the register's journal too (31 kap. SKVFS 2021:16).
+      await withTenant(deps.sql, staff.tenantId, (tx) =>
+        appendJournalEvent(tx, staff.tenantId, staff.registerId, 'logout', new Date(), {
+          userId: staff.userId,
+          displayName: staff.displayName,
+        }),
+      );
+    }
     if (token) await endSession(deps.sql, token);
     return reply.status(204).send();
   });

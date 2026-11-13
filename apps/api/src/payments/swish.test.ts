@@ -27,6 +27,7 @@ let base: string;
 let restaurantId: string;
 let registerId: string;
 let cashier: string;
+let manager: string;
 let soup: string;
 
 beforeAll(async () => {
@@ -66,19 +67,29 @@ beforeAll(async () => {
   const userId = (
     await call('POST', `${base}/staff`, owner, { displayName: 'Kim', role: 'cashier', pin: '2222' })
   ).json().userId;
+  const managerId = (
+    await call('POST', `${base}/staff`, owner, {
+      displayName: 'Maja',
+      role: 'manager',
+      pin: '1111',
+    })
+  ).json().userId;
   const code = (await call('POST', `${base}/registers/${registerId}/pairing-code`, owner)).json()
     .code;
   const device = (
     await app.inject({ method: 'POST', url: '/devices/pair', payload: { code, name: 'iPad' } })
   ).json().deviceToken;
-  cashier = (
-    await app.inject({
-      method: 'POST',
-      url: '/auth/login',
-      headers: { 'x-device-token': device },
-      payload: { userId, pin: '2222' },
-    })
-  ).json().token;
+  const login = async (id: string, pin: string) =>
+    (
+      await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        headers: { 'x-device-token': device },
+        payload: { userId: id, pin },
+      })
+    ).json().token as string;
+  cashier = await login(userId, '2222');
+  manager = await login(managerId, '1111');
 });
 
 afterAll(async () => {
@@ -226,5 +237,124 @@ describe('Swish at the till', () => {
       payments: [{ method: 'swish', amountOre: 9550, swishPaymentId: payment.id }],
     });
     expect(res.json().error).toBe('invalid_payment');
+  });
+});
+
+/** A Swish sale of one soup, paid and on a receipt. */
+async function swishSale() {
+  const payment = (await start(9550)).json();
+  await call('POST', url(`/${payment.id}/simulate`), cashier, { outcome: 'paid' });
+  return (await sell({ method: 'swish', amountOre: 9550, swishPaymentId: payment.id })).json();
+}
+
+const refund = (originalReceiptId: string, amountOre: number) =>
+  call('POST', `/registers/${registerId}/swish-refunds`, manager, { originalReceiptId, amountOre });
+
+const returnSoup = (originalReceiptId: string, payment: object) =>
+  call('POST', `/registers/${registerId}/returns`, manager, {
+    originalReceiptId,
+    lines: [{ lineNo: 1, quantity: 1 }],
+    payments: [payment],
+  });
+
+describe('Swish refunds', () => {
+  it('a return of a Swish sale must go back through Swish', async () => {
+    const sale = await swishSale();
+    const manual = await returnSoup(sale.id, { method: 'swish', amountOre: -9550 });
+    expect(manual.json().error).toBe('swish_refund_needed');
+  });
+
+  it('refunds through Swish, then makes the return receipt', async () => {
+    const sale = await swishSale();
+    const listed = (await call('GET', `/registers/${registerId}/receipts`, cashier)).json();
+    expect(listed.find((r: { id: string }) => r.id === sale.id).swishRefundableOre).toBe(9550);
+
+    const started = await refund(sale.id, 9550);
+    expect(started.statusCode).toBe(201);
+    expect(started.json()).toMatchObject({ kind: 'refund', status: 'pending', amountOre: 9550 });
+
+    // Not paid out yet: no return receipt.
+    const early = await returnSoup(sale.id, {
+      method: 'swish',
+      amountOre: -9550,
+      swishRefundId: started.json().id,
+    });
+    expect(early.json().error).toBe('swish_refund_needed');
+
+    const paid = (await call('GET', url(`/${started.json().id}`), manager)).json();
+    expect(paid.status).toBe('paid');
+    const ret = await returnSoup(sale.id, {
+      method: 'swish',
+      amountOre: -9550,
+      swishRefundId: started.json().id,
+    });
+    expect(ret.statusCode).toBe(201);
+    expect(ret.json()).toMatchObject({ kind: 'return', totalOre: -9550 });
+
+    const after = (await call('GET', `/registers/${registerId}/receipts`, cashier)).json();
+    expect(after.find((r: { id: string }) => r.id === sale.id).swishRefundableOre).toBe(0);
+  });
+
+  it('reuses a refund that went out when the return receipt failed', async () => {
+    const sale = await swishSale();
+    const first = (await refund(sale.id, 9550)).json();
+    await call('GET', url(`/${first.id}`), manager);
+    // The till was reloaded before the return receipt: asking again gives the same refund.
+    const again = (await refund(sale.id, 9550)).json();
+    expect(again).toMatchObject({ id: first.id, status: 'paid' });
+  });
+
+  it('never refunds more than was paid', async () => {
+    const sale = await swishSale();
+    expect((await refund(sale.id, 9551)).json().error).toBe('swish_refund_too_large');
+    expect((await refund(sale.id, 5000)).statusCode).toBe(201);
+    // 50 + 46 kr is more than the 95,50 kr paid.
+    expect((await refund(sale.id, 4600)).json().error).toBe('swish_refund_too_large');
+  });
+
+  it('only managers refund, and only sales paid through Swish', async () => {
+    const sale = await swishSale();
+    const byCashier = await call('POST', `/registers/${registerId}/swish-refunds`, cashier, {
+      originalReceiptId: sale.id,
+      amountOre: 100,
+    });
+    expect(byCashier.statusCode).toBe(403);
+
+    const card = (await sell({ method: 'card', amountOre: 9550 })).json();
+    expect((await refund(card.id, 9550)).json().error).toBe('swish_not_refundable');
+  });
+});
+
+describe('Swish money without a receipt', () => {
+  it('stays usable after a reload and can be refunded from the back office', async () => {
+    const payment = (await start(4200)).json();
+    await call('POST', url(`/${payment.id}/simulate`), cashier, { outcome: 'paid' });
+
+    // The till was reloaded: it can still find the money.
+    const unused = (await call('GET', url('/unused'), cashier)).json();
+    expect(unused.map((p: { id: string }) => p.id)).toContain(payment.id);
+
+    const listed = (await call('GET', `${base}/swish-payments/unused`, owner)).json();
+    expect(listed.find((p: { id: string }) => p.id === payment.id)).toMatchObject({
+      amountOre: 4200,
+      register: 'KASSA-1',
+      takenBy: 'Kim',
+      refund: null,
+    });
+
+    const res = await call('POST', `${base}/swish-payments/${payment.id}/refund`, owner);
+    expect(res.statusCode).toBe(201);
+    // A second refund of the same money is refused.
+    const again = await call('POST', `${base}/swish-payments/${payment.id}/refund`, owner);
+    expect(again.json().error).toBe('swish_already_refunded');
+
+    // Refunded money is no longer usable at the till, and leaves the list once paid out.
+    expect((await call('GET', url('/unused'), cashier)).json()).toEqual(
+      expect.not.arrayContaining([expect.objectContaining({ id: payment.id })]),
+    );
+    const sale = await sell({ method: 'swish', amountOre: 4200, swishPaymentId: payment.id });
+    expect(sale.json().error).toBe('swish_already_used');
+    const later = (await call('GET', `${base}/swish-payments/unused`, owner)).json();
+    expect(later.some((p: { id: string }) => p.id === payment.id)).toBe(false);
   });
 });

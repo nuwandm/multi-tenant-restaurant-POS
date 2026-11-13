@@ -21,6 +21,19 @@ export interface SwishState {
   status: SwishStatus;
   errorCode?: string;
   paidAt?: Date;
+  /** Swish's reference for a paid payment; a refund quotes it. */
+  paymentReference?: string;
+}
+
+export interface SwishRefundRequest {
+  instructionId: string;
+  /** Swish's reference of the payment the money goes back from. */
+  originalPaymentReference: string;
+  /** The restaurant's Swish number: the refund is paid from it. */
+  payer: string;
+  amountOre: number;
+  message: string;
+  callbackPath: string;
 }
 
 /** Swish Handel, m-commerce flow: a payment request without a payer, paid by scanning a QR code. */
@@ -33,6 +46,9 @@ export interface SwishClient {
   cancel(instructionId: string): Promise<SwishState>;
   /** The QR code the guest scans, as SVG. */
   qrSvg(token: string): Promise<string>;
+  /** Gives money back from a paid payment. No guest action is needed. */
+  refund(request: SwishRefundRequest): Promise<void>;
+  refundStatus(instructionId: string): Promise<SwishState>;
 }
 
 /** Swish answered with an error, e.g. the payee isn't enrolled (ACMT03) or a bad amount (AM02). */
@@ -69,6 +85,15 @@ const STATUS: Record<string, SwishStatus> = {
 
 // ---------------------------------------------------------------------------------------------
 
+/** Swish's refund states: the money has left the restaurant once it is DEBITED. */
+const REFUND_STATUS: Record<string, SwishStatus> = {
+  CREATED: 'pending',
+  VALIDATED: 'pending',
+  DEBITED: 'paid',
+  PAID: 'paid',
+  ERROR: 'error',
+};
+
 /** Swish requests time out after three minutes if the guest doesn't pay. */
 const SIMULATED_TIMEOUT_MS = 3 * 60_000;
 
@@ -80,7 +105,11 @@ export class SimulatedSwish implements SwishClient {
   readonly simulated = true;
   private readonly requests = new Map<
     string,
-    { state: SwishState; createdAt: number; payee: string }
+    { state: SwishState; createdAt: number; payee: string; amountOre: number }
+  >();
+  private readonly refunds = new Map<
+    string,
+    { state: SwishState; ref: string; amountOre: number }
   >();
 
   async create(request: SwishPaymentRequest) {
@@ -89,6 +118,7 @@ export class SimulatedSwish implements SwishClient {
       state: { status: 'pending' },
       createdAt: Date.now(),
       payee: request.payee,
+      amountOre: request.amountOre,
     });
     return { token: randomUUID().replace(/-/g, '') };
   }
@@ -114,11 +144,48 @@ export class SimulatedSwish implements SwishClient {
     return QRCode.toString(`D${token}`, { type: 'svg', margin: 0 });
   }
 
+  /** Refunds are checked like Swish does: the payment exists, and refunds never exceed it. */
+  async refund(request: SwishRefundRequest) {
+    const original = [...this.requests.values()].find(
+      (r) => r.state.paymentReference === request.originalPaymentReference,
+    );
+    if (!original) throw new SwishError('RF02', 'Original payment not found');
+    if (original.payee !== request.payer) {
+      throw new SwishError('RF03', 'The payer is not the payee of the original payment');
+    }
+    const refunded = [...this.refunds.values()]
+      .filter((r) => r.ref === request.originalPaymentReference && r.state.status !== 'error')
+      .reduce((sum, r) => sum + r.amountOre, 0);
+    if (refunded + request.amountOre > original.amountOre) {
+      throw new SwishError('RF08', 'The refund exceeds the original payment');
+    }
+    this.refunds.set(request.instructionId, {
+      state: { status: 'pending' },
+      ref: request.originalPaymentReference,
+      amountOre: request.amountOre,
+    });
+  }
+
+  /** A simulated refund goes through on the first check after it was made. */
+  async refundStatus(id: string): Promise<SwishState> {
+    const r = this.refunds.get(id);
+    if (!r) throw new SwishError('RF04', 'No such refund');
+    if (r.state.status === 'pending') r.state = { status: 'paid', paidAt: new Date() };
+    return r.state;
+  }
+
   /** What the guest's phone would do. */
   simulate(id: string, outcome: 'paid' | 'declined') {
     const r = this.requests.get(id);
     if (!r || r.state.status !== 'pending') return false;
-    r.state = outcome === 'paid' ? { status: 'paid', paidAt: new Date() } : { status: 'declined' };
+    r.state =
+      outcome === 'paid'
+        ? {
+            status: 'paid',
+            paidAt: new Date(),
+            paymentReference: randomUUID().replace(/-/g, '').toUpperCase(),
+          }
+        : { status: 'declined' };
     return true;
   }
 }
@@ -168,16 +235,25 @@ export class HttpSwish implements SwishClient {
   async status(id: string): Promise<SwishState> {
     const res = await this.call('GET', `/api/v1/paymentrequests/${id}`);
     if (res.status !== 200) throw toError(res);
-    const body = JSON.parse(res.body) as {
-      status: string;
-      errorCode?: string | null;
-      datePaid?: string | null;
-    };
-    return {
-      status: STATUS[body.status] ?? 'error',
-      ...(body.errorCode && { errorCode: body.errorCode }),
-      ...(body.datePaid && { paidAt: new Date(body.datePaid) }),
-    };
+    return parseState(res.body, STATUS);
+  }
+
+  async refund(r: SwishRefundRequest) {
+    const res = await this.call('PUT', `/api/v2/refunds/${r.instructionId}`, {
+      originalPaymentReference: r.originalPaymentReference,
+      callbackUrl: `${this.config.callbackBase}${r.callbackPath}`,
+      payerAlias: r.payer,
+      currency: 'SEK',
+      amount: swishAmount(r.amountOre),
+      message: swishMessage(r.message),
+    });
+    if (res.status !== 201) throw toError(res);
+  }
+
+  async refundStatus(id: string): Promise<SwishState> {
+    const res = await this.call('GET', `/api/v1/refunds/${id}`);
+    if (res.status !== 200) throw toError(res);
+    return parseState(res.body, REFUND_STATUS);
   }
 
   async cancel(id: string): Promise<SwishState> {
@@ -237,6 +313,21 @@ export class HttpSwish implements SwishClient {
       req.end();
     });
   }
+}
+
+function parseState(json: string, statuses: Record<string, SwishStatus>): SwishState {
+  const body = JSON.parse(json) as {
+    status: string;
+    errorCode?: string | null;
+    datePaid?: string | null;
+    paymentReference?: string | null;
+  };
+  return {
+    status: statuses[body.status] ?? 'error',
+    ...(body.errorCode && { errorCode: body.errorCode }),
+    ...(body.datePaid && { paidAt: new Date(body.datePaid) }),
+    ...(body.paymentReference && { paymentReference: body.paymentReference }),
+  };
 }
 
 function toError(res: HttpResult): SwishError {

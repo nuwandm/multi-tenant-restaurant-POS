@@ -266,4 +266,18 @@ export const sv: Record<string, string> = {
   'This restaurant has no Swish number yet. Add it in the back office.':
     'Restaurangen har inget Swish-nummer än. Lägg till det i backoffice.',
   '{n} of {count}': '{n} av {count}',
+  'Only {amount} of the Swish payment is left to refund.':
+    'Bara {amount} av Swish-betalningen finns kvar att återbetala.',
+  'Refunding through Swish…': 'Återbetalar via Swish…',
+  'That is more than is left of the Swish payment.':
+    'Det är mer än vad som finns kvar av Swish-betalningen.',
+  'The money goes straight back to the guest through Swish.':
+    'Pengarna går direkt tillbaka till gästen via Swish.',
+  'This sale was not paid through Swish.': 'Det här köpet betalades inte via Swish.',
+  'This sale was paid by Swish: the money must go back through Swish.':
+    'Det här köpet betalades med Swish: pengarna måste gå tillbaka via Swish.',
+  'Swish has not paid the refund yet. Try again in a minute.':
+    'Swish har inte betalat ut återbetalningen än. Försök igen om en minut.',
+  'Swish did not pay out the refund. Try again, or refund with cash or card.':
+    'Swish betalade inte ut återbetalningen. Försök igen, eller återbetala kontant eller med kort.',
 };

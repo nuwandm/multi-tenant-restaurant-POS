@@ -109,6 +109,8 @@ export interface Receipt {
 /** A receipt from the list endpoint, with how much of each line has been returned. */
 export interface ListedReceipt extends Receipt {
   returnedQuantities: Record<number, number>;
+  /** Swish money on this sale that can still go back through Swish. */
+  swishRefundableOre: number;
 }
 
 export interface Report extends ZReportTotals {
@@ -129,6 +131,7 @@ export interface NewReceipt {
 
 export interface SwishPayment {
   id: string;
+  kind: 'payment' | 'refund';
   status: 'pending' | 'paid' | 'declined' | 'cancelled' | 'error';
   amountOre: number;
   errorCode: string | null;
@@ -160,6 +163,9 @@ const ERROR_TEXT: Record<string, string> = {
   swish_amount_mismatch: 'The Swish payment is for a different amount than the bill.',
   swish_failed: 'Swish refused the payment request. Try again or use another method.',
   swish_unavailable: 'Could not reach Swish. Try again or use another method.',
+  swish_refund_needed: 'This sale was paid by Swish: the money must go back through Swish.',
+  swish_refund_too_large: 'That is more than is left of the Swish payment.',
+  swish_not_refundable: 'This sale was not paid through Swish.',
   register_retired: 'This register is retired.',
   article_unavailable: 'An item is no longer on the menu. Clear the order and try again.',
   option_unavailable: 'An option is no longer available. Remove the item and add it again.',
@@ -356,7 +362,7 @@ export const createReturn = (
   body: {
     originalReceiptId: string;
     lines: { lineNo: number; quantity: number }[];
-    payments: { method: PaymentMethod; amountOre: number }[];
+    payments: { method: PaymentMethod; amountOre: number; swishRefundId?: string }[];
   },
   idempotencyKey: string,
 ) => post<Receipt>('returns', body, idempotencyKey);
@@ -411,3 +417,27 @@ export const cancelSwishPayment = (id: string) => post<SwishPayment>(swish(`/${i
 
 export const simulateSwishPayment = (id: string, outcome: 'paid' | 'declined') =>
   post<SwishPayment>(swish(`/${id}/simulate`), { outcome });
+
+/** Paid Swish money on this register that is not on a receipt yet. */
+export const listUnusedSwishPayments = () =>
+  request<SwishPayment[]>(`/registers/${registerId}/${swish('/unused')}`);
+
+/**
+ * Sends Swish money back for a return and waits until Swish has paid it out (seconds). Returns
+ * the refund's id for the return receipt. Asking again after a failed receipt gives the same one.
+ */
+export async function refundThroughSwish(originalReceiptId: string, amountOre: number) {
+  let refund = await post<SwishPayment>('swish-refunds', { originalReceiptId, amountOre });
+  const until = Date.now() + 60_000;
+  while (refund.status === 'pending' && Date.now() < until) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    refund = await getSwishPayment(refund.id);
+  }
+  if (refund.status === 'paid') return refund.id;
+  throw new ApiError(
+    refund.status === 'pending'
+      ? 'Swish has not paid the refund yet. Try again in a minute.'
+      : 'Swish did not pay out the refund. Try again, or refund with cash or card.',
+    'swish_refund_failed',
+  );
+}

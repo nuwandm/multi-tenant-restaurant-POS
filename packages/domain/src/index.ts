@@ -1,5 +1,6 @@
 export * from './discount';
 export * from './journal';
+export * from './journal-export';
 export * from './money';
 export * from './org-number';
 export * from './receipt';

@@ -65,6 +65,20 @@ export interface SalesReport {
   vat: { vatRate: number; netOre: number; vatOre: number }[];
 }
 
+/** Swish money a guest paid that no receipt has used yet. */
+export interface UnusedSwishPayment {
+  id: string;
+  amountOre: number;
+  paidAt: string | null;
+  restaurant: string;
+  register: string;
+  takenBy: string;
+  refund: {
+    status: 'pending' | 'paid' | 'declined' | 'cancelled' | 'error';
+    errorCode: string | null;
+  } | null;
+}
+
 export interface MenuGroup {
   id: string;
   name: string;
@@ -340,6 +354,11 @@ export const api = {
     post(`${t(tenantId)}/restaurants/${restaurantId}/tables`, { name }),
   updateTable: (tenantId: string, tableId: string, body: { name?: string; active?: boolean }) =>
     patch(`${t(tenantId)}/tables/${tableId}`, body),
+
+  unusedSwish: (tenantId: string) =>
+    get<UnusedSwishPayment[]>(`${t(tenantId)}/swish-payments/unused`),
+  refundUnusedSwish: (tenantId: string, paymentId: string) =>
+    post(`${t(tenantId)}/swish-payments/${paymentId}/refund`),
 
   salesReport: (tenantId: string, from: string, to: string, restaurantId?: string | null) =>
     get<SalesReport>(

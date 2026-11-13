@@ -36,6 +36,14 @@ const salePayments = {
   },
 } as const;
 
+const returnPayments = {
+  ...payments,
+  items: {
+    ...payments.items,
+    properties: { ...payments.items.properties, swishRefundId: uuid },
+  },
+} as const;
+
 const createReceiptSchema = {
   params: registerParams,
   body: {
@@ -89,7 +97,7 @@ const createReturnSchema = {
           },
         },
       },
-      payments,
+      payments: returnPayments,
     },
   },
 } as const;

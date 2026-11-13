@@ -21,6 +21,7 @@ import { formatKr } from '../format';
 import { useT } from '../i18n';
 import { PageHeader } from '../PageHeader';
 import { useLoad } from '../useLoad';
+import { UnusedSwishCard } from './UnusedSwishCard';
 
 type Preset = 'today' | '7d' | '30d' | 'month';
 
@@ -95,6 +96,7 @@ export function ReportsPage({ tenantId }: { tenantId: string }) {
           </Group>
         }
       />
+      <UnusedSwishCard tenantId={tenantId} />
       {error && <Text c="red">{t(error)}</Text>}
       {!data && !error && (
         <Center h={320}>

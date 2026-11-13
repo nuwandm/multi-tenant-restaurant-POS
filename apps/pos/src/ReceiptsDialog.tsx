@@ -18,6 +18,7 @@ import {
 import {
   IconArrowLeft,
   IconCopy,
+  IconDeviceMobile,
   IconLock,
   IconMinus,
   IconPlus,
@@ -28,6 +29,7 @@ import { useEffect, useState } from 'react';
 import {
   createCopy,
   createReturn,
+  refundThroughSwish,
   listReceipts,
   newAttemptKey,
   type ListedReceipt,
@@ -233,16 +235,21 @@ export function ReceiptsDialog({ onDone, onClose, canReturn }: Props) {
             original={selected}
             busy={busy}
             onSubmit={(lines, method, amountOre) =>
-              run(() =>
-                createReturn(
+              run(async () => {
+                // A sale paid through Swish gets its money back through Swish first.
+                const swishRefundId =
+                  method === 'swish' && selected.swishRefundableOre > 0
+                    ? await refundThroughSwish(selected.id, -amountOre)
+                    : undefined;
+                return createReturn(
                   {
                     originalReceiptId: selected.id,
                     lines,
-                    payments: [{ method, amountOre }],
+                    payments: [{ method, amountOre, ...(swishRefundId && { swishRefundId }) }],
                   },
                   attemptKey,
-                ),
-              )
+                );
+              })
             }
           />
         )}
@@ -277,6 +284,8 @@ function ReturnForm({ original, busy, onSubmit }: ReturnFormProps) {
   const lines = Object.entries(quantities)
     .filter(([, q]) => q > 0)
     .map(([lineNo, quantity]) => ({ lineNo: Number(lineNo), quantity }));
+  const viaSwish = method === 'swish' && original.swishRefundableOre > 0;
+  const tooMuchForSwish = viaSwish && payOutOre > original.swishRefundableOre;
 
   return (
     <Stack gap="md">
@@ -345,6 +354,21 @@ function ReturnForm({ original, busy, onSubmit }: ReturnFormProps) {
         />
       </Stack>
 
+      {viaSwish && (
+        <Alert
+          color={tooMuchForSwish ? 'red' : 'blue'}
+          variant="light"
+          py="xs"
+          icon={<IconDeviceMobile size={18} />}
+        >
+          {tooMuchForSwish
+            ? t('Only {amount} of the Swish payment is left to refund.', {
+                amount: formatKr(original.swishRefundableOre),
+              })
+            : t('The money goes straight back to the guest through Swish.')}
+        </Alert>
+      )}
+
       <Group justify="space-between" px="xs">
         <Text fw={600}>{t('Refund')}</Text>
         <Text fz="xl" fw={700} c="red" className="tabular">
@@ -355,10 +379,10 @@ function ReturnForm({ original, busy, onSubmit }: ReturnFormProps) {
         size="md"
         color="red"
         loading={busy}
-        disabled={lines.length === 0}
+        disabled={lines.length === 0 || tooMuchForSwish}
         onClick={() => onSubmit(lines, method, -payOutOre)}
       >
-        {t('Make return')}
+        {busy && viaSwish ? t('Refunding through Swish…') : t('Make return')}
       </Button>
     </Stack>
   );

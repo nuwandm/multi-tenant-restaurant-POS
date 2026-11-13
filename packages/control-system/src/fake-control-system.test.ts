@@ -17,7 +17,8 @@ describe('FakeControlSystem', () => {
   it('signs a receipt with a control code', async () => {
     const cs = new FakeControlSystem(() => new Date('2026-11-12T12:00:01Z'));
     const signed = await cs.signReceipt(receipt);
-    expect(signed.controlCode).toBe('FAKE-REF-1-sale-1');
+    expect(signed.controlCode).toBe('FAKE-REF-1-sale-1-'.padEnd(59, 'X'));
+    expect(signed.controlCode).toHaveLength(59);
     expect(signed.signedAt.toISOString()).toBe('2026-11-12T12:00:01.000Z');
   });
 
@@ -40,5 +41,6 @@ describe('FakeControlSystem', () => {
     const cs = new FakeControlSystem();
     const result = await cs.registerRegister({ orgNumber: '5560000000', designation: 'KASSA-1' });
     expect(result.controlSystemRef).toBe('FAKE-KASSA-1-1');
+    expect(result.serialNumber).toBe('FAKE0000000000001');
   });
 });

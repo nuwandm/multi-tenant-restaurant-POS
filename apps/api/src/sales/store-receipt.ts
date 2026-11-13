@@ -13,7 +13,7 @@ export interface StoredReceipt extends BuiltReceipt {
   controlCode: string;
   signedAt: Date;
   originalReceiptId: string | null;
-  seller: { legalName: string; orgNumber: string };
+  seller: { legalName: string; orgNumber: string; address: string | null };
   register: { id: string; designation: string };
   /** Who rang it up. Null only for receipts from before staff login existed. */
   cashier: { id: string; displayName: string } | null;
@@ -53,10 +53,12 @@ export async function storeReceipt(
   await tx`
     INSERT INTO receipts (id, tenant_id, register_id, kind, receipt_number, original_receipt_id,
                           cashier_user_id, total_incl_vat_ore, cash_rounding_ore, control_code,
-                          signed_at, created_at, idempotency_key)
+                          signed_at, created_at, idempotency_key,
+                          seller_name, seller_org_number, seller_address)
     VALUES (${id}, ${tenantId}, ${register.id}, ${built.kind}, ${receiptNumber}, ${originalReceiptId},
             ${staff.userId}, ${built.totalOre}, ${built.cashRoundingOre}, ${signed.controlCode},
-            ${signed.signedAt}, ${createdAt}, ${idempotencyKey})`;
+            ${signed.signedAt}, ${createdAt}, ${idempotencyKey},
+            ${register.seller.legalName}, ${register.seller.orgNumber}, ${register.seller.address})`;
   await tx`
     INSERT INTO receipt_lines ${tx(
       built.lines.map((l) => ({

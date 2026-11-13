@@ -207,13 +207,15 @@ export function tenantAdminRoutes(app: FastifyInstance, deps: AppDeps) {
           throw new HttpError(409, 'designation_taken', 'That register name is already used');
 
         const [tenant] = await tx<{ org_number: string }[]>`SELECT org_number FROM tenants`;
-        const { controlSystemRef } = await deps.controlSystem.registerRegister({
+        const { controlSystemRef, serialNumber } = await deps.controlSystem.registerRegister({
           orgNumber: tenant!.org_number,
           designation,
         });
         const [row] = await tx<{ id: string }[]>`
-          INSERT INTO cash_registers (tenant_id, restaurant_id, designation, control_system_ref)
-          VALUES (${ctx.tenantId}, ${req.params.restaurantId}, ${designation}, ${controlSystemRef})
+          INSERT INTO cash_registers
+            (tenant_id, restaurant_id, designation, control_system_ref, control_system_serial)
+          VALUES (${ctx.tenantId}, ${req.params.restaurantId}, ${designation}, ${controlSystemRef},
+                  ${serialNumber})
           RETURNING id`;
         await audit(tx, ctx, 'register.create', row!.id, { designation });
         return { id: row!.id, designation };

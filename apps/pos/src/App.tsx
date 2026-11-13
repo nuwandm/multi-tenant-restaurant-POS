@@ -60,6 +60,7 @@ import {
   getHealth,
   getMenu,
   isManager,
+  listUnusedSwishPayments,
   listOpenOrders,
   newAttemptKey,
   sendOpenOrder,
@@ -198,7 +199,15 @@ export function App({ staff, device, onLogout }: Props) {
 
   useEffect(() => {
     getMenu()
-      .then(setMenu)
+      .then((m) => {
+        setMenu(m);
+        // Swish money paid before a reload, not on a receipt yet: keep it usable.
+        if (m.restaurant.swish) {
+          listUnusedSwishPayments()
+            .then((list) => setPaidSwish(list.map((p) => ({ id: p.id, amountOre: p.amountOre }))))
+            .catch(() => {});
+        }
+      })
       .catch((err: unknown) => setLoadError(message(err)));
   }, []);
 
