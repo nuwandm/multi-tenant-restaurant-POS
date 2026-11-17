@@ -215,12 +215,14 @@ describe('owner with several companies and branches', () => {
       legalName: 'Olles Andra AB',
       orgNumber: randomOrgNumber(),
       restaurantName: 'Olles Bar',
+      restaurantAddress: 'Götgatan 10, Stockholm',
     });
     expect(second.statusCode).toBe(201);
     const secondId = second.json().tenantId as string;
 
     const branch = await call('POST', `/admin/tenants/${owner.tenantId}/restaurants`, owner.token, {
       name: 'Olles Krog Söder',
+      address: 'Götgatan 12, Stockholm',
     });
     expect(branch.statusCode).toBe(201);
 

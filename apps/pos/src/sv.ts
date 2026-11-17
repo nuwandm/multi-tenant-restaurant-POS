@@ -68,7 +68,6 @@ export const sv: Record<string, string> = {
   'No items match “{query}”': 'Inga varor matchar ”{query}”',
   'No items yet': 'Inga varor än',
   'Search items': 'Sök varor',
-  'Subtotal excl. VAT': 'Delsumma exkl. moms',
   'Tap items on the left to start an order.':
     'Tryck på varor till vänster för att starta en order.',
   'VAT {rate}%': 'Moms {rate}%',

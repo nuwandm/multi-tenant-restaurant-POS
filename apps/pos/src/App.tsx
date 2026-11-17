@@ -470,7 +470,6 @@ export function App({ staff, device, onLogout }: Props) {
       )
     : (menu.groups[groupIndex]?.articles ?? []).map((a) => ({ a, gi: groupIndex }));
   const total = preview?.totalOre ?? 0;
-  const vatTotal = preview?.vatTotals.reduce((s, v) => s + v.vatOre, 0) ?? 0;
   const lineDiscounts = basket.reduce((s, l) => s + Math.min(l.discountOre, lineGross(l)), 0);
   const itemCount = basket.reduce((n, l) => n + l.quantity, 0);
   const canPay = basket.length > 0 && busy === null && online !== false && preview !== null;
@@ -736,7 +735,7 @@ export function App({ staff, device, onLogout }: Props) {
 
           {/* Order */}
           <Box className="order-panel">
-            <Group justify="space-between" px="lg" pt="lg" pb="md" wrap="nowrap">
+            <Group justify="space-between" px="lg" pt="md" pb="xs" wrap="nowrap">
               <div>
                 <Group gap={8}>
                   <Title order={4} fw={600}>
@@ -870,40 +869,31 @@ export function App({ staff, device, onLogout }: Props) {
               )}
             </ScrollArea>
 
-            <Stack gap={12} p="lg" className="checkout">
-              <Stack gap={4}>
-                {(lineDiscounts > 0 || orderDiscount > 0) && (
-                  <Group justify="space-between">
-                    <Text fz="sm" c="brand">
-                      {t('Discounts')}
-                    </Text>
-                    <Text fz="sm" c="brand" className="mono">
-                      −{formatKr(lineDiscounts + orderDiscount)}
-                    </Text>
-                  </Group>
-                )}
+            <Stack gap={10} px="lg" py="md" className="checkout">
+              {(lineDiscounts > 0 || orderDiscount > 0) && (
                 <Group justify="space-between">
-                  <Text fz="sm" c="dimmed">
-                    {t('Subtotal excl. VAT')}
+                  <Text fz="sm" c="brand">
+                    {t('Discounts')}
                   </Text>
-                  <Text fz="sm" c="dimmed" className="mono">
-                    {formatKr(total - vatTotal)}
+                  <Text fz="sm" c="brand" className="mono">
+                    −{formatKr(lineDiscounts + orderDiscount)}
                   </Text>
                 </Group>
-                {preview?.vatTotals.map((v) => (
-                  <Group key={v.vatRate} justify="space-between">
-                    <Text fz="sm" c="dimmed">
-                      {t('VAT {rate}%', { rate: v.vatRate })}
+              )}
+              {/* VAT per rate sits under the total, so the order list keeps the height. */}
+              <Group justify="space-between" align="flex-end" wrap="nowrap">
+                <div>
+                  <Text fw={600}>{t('Total')}</Text>
+                  {preview && preview.vatTotals.length > 0 && (
+                    <Text fz="xs" c="dimmed">
+                      {preview.vatTotals
+                        .map(
+                          (v) => `${t('VAT {rate}%', { rate: v.vatRate })} ${formatKr(v.vatOre)}`,
+                        )
+                        .join(' · ')}
                     </Text>
-                    <Text fz="sm" c="dimmed" className="mono">
-                      {formatKr(v.vatOre)}
-                    </Text>
-                  </Group>
-                ))}
-              </Stack>
-              <Divider color="var(--app-line)" />
-              <Group justify="space-between" align="flex-end">
-                <Text fw={600}>{t('Total')}</Text>
+                  )}
+                </div>
                 <Text className="total-figure">{formatKr(total)}</Text>
               </Group>
 
@@ -952,7 +942,7 @@ export function App({ staff, device, onLogout }: Props) {
               <Button
                 className="charge-button"
                 size="xl"
-                h={64}
+                h={56}
                 fullWidth
                 loading={busy === 'card'}
                 disabled={!canPay}
@@ -967,7 +957,7 @@ export function App({ staff, device, onLogout }: Props) {
                 <Button
                   variant="default"
                   size="md"
-                  h={52}
+                  h={48}
                   loading={busy === 'swish'}
                   disabled={!canPay}
                   leftSection={<IconDeviceMobile size={19} stroke={1.7} />}
@@ -978,7 +968,7 @@ export function App({ staff, device, onLogout }: Props) {
                 <Button
                   variant="default"
                   size="md"
-                  h={52}
+                  h={48}
                   disabled={!canPay}
                   leftSection={<IconCash size={19} stroke={1.7} />}
                   onClick={() => setDialog({ kind: 'cash' })}
@@ -988,7 +978,7 @@ export function App({ staff, device, onLogout }: Props) {
                 <Button
                   variant="default"
                   size="md"
-                  h={52}
+                  h={48}
                   disabled={!canPay}
                   leftSection={<IconUsersGroup size={19} stroke={1.7} />}
                   onClick={() => setDialog({ kind: 'split' })}

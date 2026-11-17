@@ -4,6 +4,7 @@ import { createSql } from './db/client';
 import { swishFromEnv } from './payments/swish';
 
 const databaseUrl = process.env.DATABASE_URL;
+
 if (!databaseUrl) {
   console.error('DATABASE_URL is not set. Copy .env.example to .env.');
   process.exit(1);

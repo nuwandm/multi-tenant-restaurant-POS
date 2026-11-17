@@ -87,7 +87,7 @@ textarea {
 }
 
 .total-figure {
-  font-size: 34px;
+  font-size: 30px;
   font-weight: 600;
   letter-spacing: -0.035em;
   line-height: 1;
@@ -286,7 +286,7 @@ textarea {
 }
 
 .order-line {
-  padding: 12px 0;
+  padding: 8px 0;
   border-bottom: 1px solid var(--app-line);
   animation: line-in 160ms ease-out;
 }
